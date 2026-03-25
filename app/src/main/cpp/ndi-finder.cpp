@@ -4,7 +4,7 @@
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_de_daubli_ndimonitor_ndi_NdiFinder_findCreate(
+Java_de_daubli_feedwatch_ndi_NdiFinder_findCreate(
     JNIEnv* env, jclass /*clazz*/,
     jboolean jShowLocalSources,
     jstring jGroups,
@@ -41,7 +41,7 @@ Java_de_daubli_ndimonitor_ndi_NdiFinder_findCreate(
  * [name0, url0, name1, url1, ...]
  */
 JNIEXPORT jobjectArray JNICALL
-Java_de_daubli_ndimonitor_ndi_NdiFinder_findGetCurrentSources(
+Java_de_daubli_feedwatch_ndi_NdiFinder_findGetCurrentSources(
     JNIEnv* env, jclass /*clazz*/, jlong finderPtr)
 {
     auto instance = reinterpret_cast<NDIlib_find_instance_t>(finderPtr);
@@ -89,7 +89,7 @@ Java_de_daubli_ndimonitor_ndi_NdiFinder_findGetCurrentSources(
 }
 
 JNIEXPORT void JNICALL
-Java_de_daubli_ndimonitor_ndi_NdiFinder_findDestroy(
+Java_de_daubli_feedwatch_ndi_NdiFinder_findDestroy(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong pFind)
 {
     auto instance = reinterpret_cast<NDIlib_find_instance_t>(pFind);
@@ -98,7 +98,7 @@ Java_de_daubli_ndimonitor_ndi_NdiFinder_findDestroy(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_de_daubli_ndimonitor_ndi_NdiFinder_findWaitForSources(
+Java_de_daubli_feedwatch_ndi_NdiFinder_findWaitForSources(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong pFind, jint jTimeout)
 {
     auto instance = reinterpret_cast<NDIlib_find_instance_t>(pFind);

@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "de.daubli.ndimonitor"
+        applicationId "de.daubli.feedwatch"
         minSdk 25
         targetSdk 33
         versionCode 1

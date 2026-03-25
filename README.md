@@ -1,6 +1,9 @@
-# NdiMonitor
+# FeedWatch
 
 Android App to view an [NDI®](http://ndi.tv/)-Stream on an Android mobile phone.
+
+This project was renamed from NDIMonitor to FeedWatch to avoid confusion with the official 
+NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vizrt ;)
 
 ## Features
 
@@ -76,13 +79,13 @@ Follow the installer instructions for your platform and note the installation di
 
 After installation, copy the NDI header files into the project’s C++ include directory:
 
-`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/include/* \ <PROJECT_ROOT>/NdiMonitor/app/src/main/cpp/include/`
+`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/include/* \ <PROJECT_ROOT>/FeedWatch/app/src/main/cpp/include/`
 
 ### 3.2 Copy NDI Library Binaries
 
 Next, copy the NDI library binaries into the project’s jniLibs directory:
 
-`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/lib/* <PROJECT_ROOT>/NdiMonitor/app/src/main/jniLibs/`
+`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/lib/* <PROJECT_ROOT>/FeedWatch/app/src/main/jniLibs/`
 
 Ensure that the copied libraries match the ABIs you intend to build for (e.g. arm64-v8a, armeabi-v7a).
 

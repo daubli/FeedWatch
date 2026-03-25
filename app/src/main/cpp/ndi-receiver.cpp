@@ -4,7 +4,7 @@
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_de_daubli_ndimonitor_ndi_NdiReceiver_receiveCreateDefaultSettings(JNIEnv* env, jclass /*clazz*/) {
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCreateDefaultSettings(JNIEnv* env, jclass /*clazz*/) {
     NDIlib_recv_create_v3_t recv_create_struct;
     std::memset(&recv_create_struct, 0, sizeof(recv_create_struct));
 
@@ -21,7 +21,7 @@ Java_de_daubli_ndimonitor_ndi_NdiReceiver_receiveCreateDefaultSettings(JNIEnv* e
  * Connect by value (name/url). To disconnect, pass (null, null).
  */
 JNIEXPORT void JNICALL
-Java_de_daubli_ndimonitor_ndi_NdiReceiver_receiveConnect(
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveConnect(
     JNIEnv* env, jclass /*clazz*/, jlong pReceiver, jstring jName, jstring jUrlAddress)
 {
     auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
@@ -52,7 +52,7 @@ Java_de_daubli_ndimonitor_ndi_NdiReceiver_receiveConnect(
 }
 
 JNIEXPORT void JNICALL
-Java_de_daubli_ndimonitor_ndi_NdiReceiver_receiveDestroy(JNIEnv* env, jclass /*clazz*/, jlong pReceiver) {
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveDestroy(JNIEnv* env, jclass /*clazz*/, jlong pReceiver) {
     auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
     if (!recv) return;
     NDIlib_recv_destroy(recv);

@@ -13,12 +13,12 @@ extern "C" {
     }
 
     JNIEXPORT jboolean JNICALL
-    Java_de_daubli_ndimonitor_ndi_Ndi_nInitializeNDI(JNIEnv *env, jobject thiz) {
+    Java_de_daubli_feedwatch_ndi_Ndi_nInitializeNDI(JNIEnv *env, jobject thiz) {
         return boolToJBoolean(NDIlib_initialize());
     }
 
     JNIEXPORT jstring JNICALL
-    Java_de_daubli_ndimonitor_ndi_Ndi_nGetNdiVersion(JNIEnv* env, jobject thiz) {
+    Java_de_daubli_feedwatch_ndi_Ndi_nGetNdiVersion(JNIEnv* env, jobject thiz) {
         const char* version = NDIlib_version();
         if (version == nullptr) {
             version = "Unknown";
@@ -27,7 +27,7 @@ extern "C" {
     }
 
     JNIEXPORT jboolean JNICALL
-    Java_de_daubli_ndimonitor_ndi_Ndi_nIsSupportedCpu(JNIEnv *env, jclass jClazz) {
+    Java_de_daubli_feedwatch_ndi_Ndi_nIsSupportedCpu(JNIEnv *env, jclass jClazz) {
         return boolToJBoolean(NDIlib_is_supported_CPU());
     }
 }

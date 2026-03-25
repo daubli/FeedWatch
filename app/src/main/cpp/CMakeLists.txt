@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10.2)
-project("NdiMonitor")
+project("FeedWatch")
 
 # Add your JNI wrapper
 add_library(ndi-wrapper SHARED

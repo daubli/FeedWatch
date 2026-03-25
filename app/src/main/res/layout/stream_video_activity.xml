@@ -5,13 +5,13 @@
 			 android:layout_height="match_parent"
 			 tools:context=".StreamVideoActivity">
 
-	<de.daubli.ndimonitor.view.base.OpenGLVideoView
+	<de.daubli.feedwatch.view.base.OpenGLVideoView
 			android:id="@+id/openGLVideoView"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"
 			android:visibility="invisible"/>
 
-	<de.daubli.ndimonitor.view.overlays.framehelper.FramingHelperOverlayView
+	<de.daubli.feedwatch.view.overlays.framehelper.FramingHelperOverlayView
 			android:id="@+id/framingHelperOverlayView"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"

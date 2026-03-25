@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-		  package="de.daubli.ndimonitor">
+		  package="de.daubli.feedwatch">
 	<uses-sdk android:minSdkVersion="25" android:targetSdkVersion="33"/>
 	<uses-feature android:name="android.hardware.usb.host"/>
 	<uses-feature android:name="android.hardware.camera" android:required="false"/>
@@ -14,13 +14,13 @@
 			android:label="@string/app_name"
 			android:roundIcon="@mipmap/ic_launcher_round"
 			android:supportsRtl="true"
-			android:name="de.daubli.ndimonitor.NdiMonitorApplication"
+			android:name="de.daubli.feedwatch.FeedWatchApplication"
 			android:largeHeap="true"
 			android:hardwareAccelerated="true"
 			android:vmSafeMode="true">
 		>
 		<activity
-				android:name="de.daubli.ndimonitor.MainActivity"
+				android:name="de.daubli.feedwatch.MainActivity"
 				android:exported="true"
 				android:theme="@style/Theme.NdiFinder">
 			<intent-filter>
@@ -32,19 +32,19 @@
 			</intent-filter>
 		</activity>
 		<activity
-				android:name="de.daubli.ndimonitor.StreamVideoActivity"
+				android:name="de.daubli.feedwatch.StreamVideoActivity"
 				android:screenOrientation="landscape"
 				android:exported="true"
 				android:theme="@style/Theme.AppCompat.NoActionBar"
 		>
 		</activity>
 		<activity
-				android:name="de.daubli.ndimonitor.SettingsActivity"
+				android:name="de.daubli.feedwatch.SettingsActivity"
 				android:exported="true"
 				android:theme="@style/Theme.AppCompat.Light"
 		/>
 		<activity
-				android:name="de.daubli.ndimonitor.AboutActivity"
+				android:name="de.daubli.feedwatch.AboutActivity"
 				android:exported="true"
 				android:theme="@style/Theme.NdiFinder"
 		/>
