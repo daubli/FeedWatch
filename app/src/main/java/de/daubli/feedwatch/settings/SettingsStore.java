@@ -12,18 +12,20 @@ public class SettingsStore {
 
     private final SharedPreferences sharedPreferences;
 
-    private static final String ADDITIONAL_SOURCES_KEY = "de.daubli.ndimonitor.additionalsources";
+    private static final String ADDITIONAL_SOURCES_KEY = "de.daubli.feedwatch.additionalsources";
 
-    private static final String FRAMING_HELPER_ENABLED_KEY = "de.daubli.ndimonitor.view.framing-helper.enabled";
+    private static final String FRAMING_HELPER_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.enabled";
 
-    private static final String FOCUS_ASSIST_ENABLED_KEY = "de.daubli.ndimonitor.view.overlays.focusassist.enabled";
+    private static final String FOCUS_ASSIST_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.focusassist.enabled";
 
-    private static final String ZEBRA_ENABLED_KEY = "de.daubli.ndimonitor.view.overlays.zebra.enabled";
+    private static final String ZEBRA_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.zebra.enabled";
 
-    private static final String LOW_BANDWIDTH_MODE_ENABLED_KEY = "de.daubli.ndimonitor.ndi.lowbandwidthmode.enabled";
+    private static final String TALLY_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.tally.enabled";
+
+    private static final String LOW_BANDWIDTH_MODE_ENABLED_KEY = "de.daubli.feedwatch.ndi.lowbandwidthmode.enabled";
 
     public SettingsStore() {
-        sharedPreferences = getAppContext().getSharedPreferences("de.daubli.ndimonitor_preferences",
+        sharedPreferences = getAppContext().getSharedPreferences("de.daubli.feedwatch_preferences",
                 Context.MODE_PRIVATE);
     }
 
@@ -100,6 +102,19 @@ public class SettingsStore {
     public void setLowBandwidthModeEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(LOW_BANDWIDTH_MODE_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    public boolean isTallyEnabled() {
+        if (sharedPreferences.contains(TALLY_ENABLED_KEY)) {
+            return sharedPreferences.getBoolean(TALLY_ENABLED_KEY, false);
+        }
+        return false;
+    }
+
+    public void setTallyEnabled(boolean enabled) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(TALLY_ENABLED_KEY, enabled);
         editor.apply();
     }
 }

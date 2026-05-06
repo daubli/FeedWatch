@@ -16,6 +16,10 @@ public class NdiReceiver {
         }
     }
 
+    public NdiTally captureTally(int timeoutMs) {
+        return receiveCaptureTally(instancePointer, timeoutMs);
+    }
+
     public void close() {
         receiveDestroy(instancePointer);
     }
@@ -25,4 +29,6 @@ public class NdiReceiver {
     private static native void receiveConnect(long receiverPtr, String name, String urlAddress);
 
     private static native void receiveDestroy(long instancePointer);
+
+    private static native NdiTally receiveCaptureTally(long receiverPtr, int timeoutMs);
 }

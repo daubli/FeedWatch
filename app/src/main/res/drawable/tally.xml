@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+		android:width="36dp"
+		android:height="36dp"
+		android:viewportWidth="36"
+		android:viewportHeight="36">
+
+	<!-- Outer box -->
+	<path
+			android:fillColor="@android:color/transparent"
+			android:strokeColor="#FFFFFF"
+			android:strokeWidth="2.0"
+			android:pathData="M0,0h36v36H0z" />
+
+	<!-- Small TALLY text -->
+	<path
+			android:fillColor="#FFFFFF"
+			android:pathData="
+
+        M7,13h4v1.5h-1.2v8h-1.6v-8H7z
+
+        M12,22.5l0.8,-9.5h2.6l0.8,9.5h-1.5l-0.1,-2h-1.1l-0.1,2z
+        M13.6,19.5h0.9l-0.25,-4.5h-0.4z
+
+        M17.1,13h1.6v8h2.5v1.5h-4.1z
+
+        M21.9,13h1.5v8h2.5v1.5h-4.1z
+
+        M24.8,13h1.6l0.8,3.2l0.8,-3.2h1.6L28,18.2v4.3h-1.6v-4.3z
+        " />
+</vector>

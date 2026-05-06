@@ -19,6 +19,7 @@ import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
 import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.view.base.OpenGLVideoView;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingHelperOverlayView;
+import de.daubli.feedwatch.view.overlays.tally.TallyOverlayView;
 
 public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
@@ -37,6 +38,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     private final OpenGLVideoView videoView;
 
     private final FramingHelperOverlayView framingHelperOverlayView;
+
+    private final TallyOverlayView tallyOverlayView;
 
     private NdiReceiver receiver;
 
@@ -58,6 +61,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private Thread videoCaptureThread;
 
+    private Thread tallyCaptureThread;
+
     private final AtomicReference<NdiVideoFrame> renderFrame = new AtomicReference<>();
 
     private NdiVideoFrame captureFrame;
@@ -72,6 +77,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         this.activity = activity;
         this.videoView = binding.openGLVideoView;
         this.framingHelperOverlayView = binding.framingHelperOverlayView;
+        this.tallyOverlayView = binding.tallyOverlayView;
     }
 
     @Override
@@ -90,6 +96,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             startAudioCaptureThread();
             startAudioThread();
             startVideoCaptureThread();
+            startTallyCaptureThread();
 
             mainHandler.post(() -> {
                 choreographer = Choreographer.getInstance();
@@ -306,6 +313,41 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             return false;
         }
         return data.remaining() > 0;
+    }
+
+    private void startTallyCaptureThread() {
+        tallyCaptureThread = new Thread(() -> {
+            while (running && !Thread.currentThread().isInterrupted()) {
+                try {
+                    if (receiver == null) {
+                        Thread.sleep(20);
+                    } else {
+                        NdiTally tally = receiver.captureTally(500);
+
+                        if (tally != null) {
+                            mainHandler.post(() -> {
+                                tallyOverlayView.updateTally(tally.onProgram, tally.onPreview);
+                                tallyOverlayView.setVideoRect(videoView.getVideoRect());
+                            });
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Throwable t) {
+                    Log.e(TAG, "Tally capture failed", t);
+
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }, "NDI-Tally-Capture");
+
+        tallyCaptureThread.start();
     }
 
     private void failUnsupportedFormat(int fourCC, UnsupportedOperationException e) {

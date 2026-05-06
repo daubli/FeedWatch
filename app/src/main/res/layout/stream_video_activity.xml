@@ -17,6 +17,13 @@
 			android:layout_height="match_parent"
 			android:visibility="invisible"/>
 
+	<de.daubli.feedwatch.view.overlays.tally.TallyOverlayView
+			android:id="@+id/tallyOverlayView"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:visibility="gone"
+	/>
+
 	<!-- Horizontal layout for the buttons -->
 	<LinearLayout
 			android:id="@+id/menu_layout"
@@ -32,6 +39,17 @@
 		<Space
 				android:layout_width="0dp"
 				android:layout_height="45dp" android:layout_weight="1"
+		/>
+
+		<ImageButton
+				android:id="@+id/tally_button"
+				android:layout_width="36dp"
+				android:layout_height="36dp"
+				android:layout_marginTop="4dp"
+				android:src="@drawable/tally"
+				android:background="@android:color/transparent"
+				android:layout_marginEnd="10dp"
+				android:scaleType="fitXY"
 		/>
 
 		<ImageButton

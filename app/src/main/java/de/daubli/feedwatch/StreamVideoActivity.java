@@ -43,6 +43,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         initializeZebraButton();
         initializeToggleFocusAssistButton();
         initializeToggleGridButton();
+        initializeTallyButton();
         initializeCloseButton();
         initShowHideMenu();
     }
@@ -60,6 +61,13 @@ public class StreamVideoActivity extends AppCompatActivity {
         if (settingsStore.isZebraEnabled()) {
             viewBinding.openGLVideoView.setZebraOverlayEnabled(true);
             viewBinding.zebraButton.setImageResource(R.drawable.zebra_selected);
+        }
+        if (settingsStore.isTallyEnabled()) {
+            viewBinding.tallyOverlayView.setVisibility(View.VISIBLE);
+            viewBinding.tallyOverlayView.setTallyEnabled(true);
+            viewBinding.tallyButton.setImageResource(R.drawable.tally_selected);
+            viewBinding.tallyOverlayView.bringToFront();
+            viewBinding.menuLayout.bringToFront();
         }
     }
 
@@ -122,7 +130,24 @@ public class StreamVideoActivity extends AppCompatActivity {
                 viewBinding.framingHelperOverlayView.bringToFront();
                 viewBinding.menuLayout.bringToFront();
             }
-            viewBinding.framingHelperOverlayView.toggleFramingHelper();
+        });
+    }
+
+    private void initializeTallyButton() {
+        viewBinding.tallyButton.setOnClickListener(view -> {
+            SettingsStore settingsStore = new SettingsStore();
+
+            boolean enabled = !viewBinding.tallyOverlayView.isTallyEnabled();
+
+            viewBinding.tallyOverlayView.setTallyEnabled(enabled);
+            viewBinding.tallyOverlayView.setVisibility(enabled ? View.VISIBLE : View.GONE);
+            viewBinding.tallyButton.setImageResource(enabled ? R.drawable.tally_selected : R.drawable.tally);
+            settingsStore.setTallyEnabled(enabled);
+
+            if (enabled) {
+                viewBinding.tallyOverlayView.bringToFront();
+                viewBinding.menuLayout.bringToFront();
+            }
         });
     }
 

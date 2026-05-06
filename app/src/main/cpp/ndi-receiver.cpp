@@ -63,4 +63,64 @@ Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveDestroy(JNIEnv* env, jclass /*cl
     NDIlib_recv_destroy(recv);
 }
 
+static bool attr_is_true(const char* xml, const char* attr) {
+    if (!xml || !attr) return false;
+
+    std::string s(xml);
+    return s.find(std::string(attr) + "=\"true\"") != std::string::npos ||
+           s.find(std::string(attr) + "='true'") != std::string::npos ||
+           s.find(std::string(attr) + "=\"1\"") != std::string::npos ||
+           s.find(std::string(attr) + "='1'") != std::string::npos;
+}
+
+JNIEXPORT jobject JNICALL
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCaptureTally(
+    JNIEnv* env,
+    jclass,
+    jlong pReceiver,
+    jint timeoutMs
+) {
+    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
+    if (!recv) return nullptr;
+
+    NDIlib_metadata_frame_t metadataFrame;
+    std::memset(&metadataFrame, 0, sizeof(metadataFrame));
+
+    auto type = NDIlib_recv_capture_v3(
+        recv,
+        nullptr,
+        nullptr,
+        &metadataFrame,
+        timeoutMs
+    );
+
+    if (type != NDIlib_frame_type_metadata || metadataFrame.p_data == nullptr) {
+        return nullptr;
+    }
+
+    jobject result = nullptr;
+    const char* xml = metadataFrame.p_data;
+
+    if (std::strstr(xml, "<ndi_tally_echo") != nullptr) {
+        bool onProgram = attr_is_true(xml, "on_program");
+        bool onPreview = attr_is_true(xml, "on_preview");
+
+        jclass tallyClass = env->FindClass("de/daubli/feedwatch/ndi/NdiTally");
+        if (tallyClass != nullptr) {
+            jmethodID ctor = env->GetMethodID(tallyClass, "<init>", "(ZZ)V");
+            if (ctor != nullptr) {
+                result = env->NewObject(
+                    tallyClass,
+                    ctor,
+                    onProgram ? JNI_TRUE : JNI_FALSE,
+                    onPreview ? JNI_TRUE : JNI_FALSE
+                );
+            }
+        }
+    }
+
+    NDIlib_recv_free_metadata(recv, &metadataFrame);
+    return result;
+}
+
 } // extern "C"
