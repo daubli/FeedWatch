@@ -16,17 +16,11 @@ public class UVCSourceFinder {
         this.usbManager = (UsbManager) this.context.getSystemService(Context.USB_SERVICE);
     }
 
-    /**
-     * Gibt eine Liste der gefundenen UVC-Geräte zurück.
-     */
     public UVCSource[] getUvcSources() {
         HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
         return deviceList.values().stream().filter(this::isUvcDevice).map(UVCSource::new).toArray(UVCSource[]::new);
     }
 
-    /**
-     * Prüft, ob das Gerät ein UVC-Gerät ist.
-     */
     private boolean isUvcDevice(UsbDevice device) {
         return device.getDeviceClass() == UsbConstants.USB_CLASS_VIDEO
                 || (device.getInterfaceCount() > 0 &&
