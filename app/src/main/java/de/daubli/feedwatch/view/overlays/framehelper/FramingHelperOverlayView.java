@@ -11,8 +11,6 @@ public class FramingHelperOverlayView extends View {
 
     private Paint linePaint;
 
-    private boolean isVisible = false;
-
     private Rect visibleRect = null;
 
     public FramingHelperOverlayView(Context context) {
@@ -38,14 +36,6 @@ public class FramingHelperOverlayView extends View {
     }
 
     /**
-     * Show or hide the framing grid.
-     */
-    public void toggleFramingHelper() {
-        isVisible = !isVisible;
-        invalidate();
-    }
-
-    /**
      * Set a specific area to draw the grid in (e.g. actual video bounds).
      */
     public void setFramingRect(Rect rect) {
@@ -56,10 +46,6 @@ public class FramingHelperOverlayView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
-        if (!isVisible) {
-            return;
-        }
 
         float left, top, right, bottom;
 

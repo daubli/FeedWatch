@@ -52,7 +52,6 @@ public class StreamVideoActivity extends AppCompatActivity {
         if (settingsStore.isFramingHelperOverlayEnabled()) {
             viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
             viewBinding.gridButton.setImageResource(R.drawable.grid_icon_3x3_selected);
-            viewBinding.framingHelperOverlayView.toggleFramingHelper();
         }
         if (settingsStore.isFocusAssistEnabled()) {
             viewBinding.openGLVideoView.setFocusAssistEnabled(true);
