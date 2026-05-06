@@ -4,11 +4,11 @@ public class NdiReceiver {
 
     final long instancePointer;
 
-    public NdiReceiver() {
-        this.instancePointer = receiveCreateDefaultSettings();
+    public NdiReceiver(boolean lowBandwidthModeEnabled) {
+        this.instancePointer = receiveCreate(lowBandwidthModeEnabled);
     }
 
-    public void connect(NdiSource ndiSource) {
+    public void connect(NdiSource ndiSource ) {
         if (ndiSource == null) {
             receiveConnect(instancePointer, null, null);
         } else {
@@ -20,7 +20,7 @@ public class NdiReceiver {
         receiveDestroy(instancePointer);
     }
 
-    private static native long receiveCreateDefaultSettings();
+    private static native long receiveCreate(boolean useLowBandwidth);
 
     private static native void receiveConnect(long receiverPtr, String name, String urlAddress);
 

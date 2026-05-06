@@ -18,6 +18,10 @@
 			android:text="Comma seperated ip address list"
 			android:ems="10"
 			android:id="@+id/additionalSourcesEditText"/>
+
+	<CheckBox android:layout_width="match_parent" android:layout_height="58dp"
+			  android:text="Low Bandwidth Mode"
+			  android:id="@+id/lowBandwidthMode"/>
 	<Button
 			android:text="Save and Back"
 			android:layout_width="match_parent"

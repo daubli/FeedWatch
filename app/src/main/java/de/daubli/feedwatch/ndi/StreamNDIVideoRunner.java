@@ -16,6 +16,7 @@ import de.daubli.feedwatch.StreamVideoRunner;
 import de.daubli.feedwatch.audio.AudioRingBuffer;
 import de.daubli.feedwatch.audio.AudioUtils;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
+import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.view.base.OpenGLVideoView;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingHelperOverlayView;
 
@@ -76,7 +77,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     @Override
     public void run() {
         try {
-            receiver = new NdiReceiver();
+            SettingsStore settingsStore = new SettingsStore();
+            receiver = new NdiReceiver(settingsStore.isLowBandwidthModeEnabled());
             receiver.connect(ndiSource);
 
             frameSync = new NdiFrameSync(receiver);
