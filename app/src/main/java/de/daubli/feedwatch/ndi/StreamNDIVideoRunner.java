@@ -117,6 +117,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         interruptThread(audioThread);
         interruptThread(audioCaptureThread);
         interruptThread(videoCaptureThread);
+        interruptThread(tallyCaptureThread);
 
         // Stop UI rendering first
         mainHandler.post(() -> {
