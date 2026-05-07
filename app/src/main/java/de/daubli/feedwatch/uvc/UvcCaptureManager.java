@@ -1,30 +1,30 @@
 package de.daubli.feedwatch.uvc;
 
-import android.content.*;
+import static de.daubli.feedwatch.uvc.UvcConstants.*;
+import static de.daubli.feedwatch.uvc.utils.ByteOrderUtils.putLe32;
+
+import android.content.Context;
 import android.hardware.usb.*;
 import android.util.Log;
 
-import java.util.Arrays;
+import java.io.ByteArrayOutputStream;
 
 public class UvcCaptureManager {
     private static final String TAG = "UvcCaptureManager";
-    private static final int USB_TYPE_CLASS = (0x01 << 5);
-    private static final int USB_RECIP_INTERFACE = 0x01;
-    private static final int USB_DIR_OUT = 0x00;
 
-    private static final int SET_CUR = 0x01;
-    private static final int VS_PROBE_CONTROL = 0x01;
-    private static final int VS_COMMIT_CONTROL = 0x02;
     private final UsbManager usbManager;
     private final UVCSource uvcSource;
+
     private UsbDeviceConnection connection;
     private UsbInterface intf;
     private UsbEndpoint endpointIn;
-    private boolean capturing = false;
+
+    private volatile boolean capturing = false;
+    private Thread captureThread;
     private FrameCallback callback;
 
     public interface FrameCallback {
-        void onFrame(byte[] data);
+        void onFrame(byte[] jpegFrame);
     }
 
     public UvcCaptureManager(UVCSource source, Context context) {
@@ -34,13 +34,10 @@ public class UvcCaptureManager {
 
     public void start(FrameCallback callback) {
         this.callback = callback;
-
-        UsbDevice device = uvcSource.getUsbDevice();
-        openDevice(device);
+        openDevice(uvcSource.getUsbDevice());
     }
 
     private void openDevice(UsbDevice device) {
-        // Search Interface with Class = Video (14), Subclass = Streaming (2)
         for (int i = 0; i < device.getInterfaceCount(); i++) {
             UsbInterface candidate = device.getInterface(i);
             if (candidate.getInterfaceClass() == UsbConstants.USB_CLASS_VIDEO &&
@@ -63,15 +60,18 @@ public class UvcCaptureManager {
 
         if (!connection.claimInterface(intf, true)) {
             Log.e(TAG, "Could not claim interface");
+            connection.close();
             return;
         }
 
         if (!startUvcStreaming(device, connection, intf.getId())) {
             Log.e(TAG, "Failed to start UVC stream");
+            stop();
             return;
         }
 
-        // search BULK IN Endpoint
+        endpointIn = null;
+
         for (int i = 0; i < intf.getEndpointCount(); i++) {
             UsbEndpoint ep = intf.getEndpoint(i);
             if (ep.getDirection() == UsbConstants.USB_DIR_IN &&
@@ -82,75 +82,147 @@ public class UvcCaptureManager {
         }
 
         if (endpointIn == null) {
-            Log.e(TAG, "No input endpoint found");
+            Log.e(TAG, "No BULK IN endpoint found");
+            stop();
             return;
         }
 
         capturing = true;
-        new Thread(this::captureLoop).start();
+        captureThread = new Thread(this::captureLoop, "UVC-Capture-Thread");
+        captureThread.start();
     }
 
-
     private void captureLoop() {
-        final int bufferSize = 1024 * 1024;
-        byte[] buffer = new byte[bufferSize];
+        byte[] packet = new byte[1024 * 1024];
 
-        while (capturing) {
-            int read = connection.bulkTransfer(endpointIn, buffer, buffer.length, 1000);
+        ByteArrayOutputStream currentFrame = new ByteArrayOutputStream(1024 * 1024);
+        int lastFid = -1;
 
-            if (read > 0) {
-                if (callback != null) {
-                    byte[] frame = Arrays.copyOf(buffer, read);
-                    callback.onFrame(frame);
+        while (capturing && connection != null && endpointIn != null) {
+            int read = connection.bulkTransfer(endpointIn, packet, packet.length, 1000);
+
+            if (read <= 0) {
+                if (read < 0 && capturing) {
+                    Log.w(TAG, "bulkTransfer failed: " + read);
                 }
-            } else if (read == 0) {
-                Log.w(TAG, "bulkTransfer returned 0 (no data)");
-            } else {
-                Log.e(TAG, "bulkTransfer failed (read=" + read + ")");
+                continue;
+            }
 
-                // prevent busy waiting
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException ignored) {
-                }
+            if (read < 2) {
+                continue;
+            }
+
+            int payloadOffset = packet[0] & 0xff;
+            if (payloadOffset == 0 || payloadOffset >= read) {
+                continue;
+            }
+
+            int flags = packet[1] & 0xff;
+
+            boolean fid = (flags & 0x01) != 0;
+            boolean eof = (flags & 0x02) != 0;
+            boolean error = (flags & 0x40) != 0;
+
+            if (error) {
+                currentFrame.reset();
+                continue;
+            }
+
+            int fidValue = fid ? 1 : 0;
+
+            if (lastFid != -1 && fidValue != lastFid && currentFrame.size() > 0) {
+                emitFrameIfJpeg(currentFrame);
+                currentFrame.reset();
+            }
+
+            lastFid = fidValue;
+
+            int payloadLength = read - payloadOffset;
+            currentFrame.write(packet, payloadOffset, payloadLength);
+
+            if (eof && currentFrame.size() > 0) {
+                emitFrameIfJpeg(currentFrame);
+                currentFrame.reset();
             }
         }
     }
 
-    private boolean startUvcStreaming(UsbDevice device, UsbDeviceConnection connection, int streamingInterfaceIndex) {
-        UsbInterface vsInterface = device.getInterface(streamingInterfaceIndex);
-        connection.claimInterface(vsInterface, true);
+    private void emitFrameIfJpeg(ByteArrayOutputStream frameBuffer) {
+        byte[] frame = frameBuffer.toByteArray();
 
-        int maxPayload = 1024; // z.B. 1024 Bytes für MJPEG/YUY2
+        if (frame.length < 4) {
+            return;
+        }
 
-        // UVC 1.1 probe control (26 bytes for USB 2.0 devices)
+        boolean startsWithSoi =
+                (frame[0] & 0xff) == 0xff &&
+                        (frame[1] & 0xff) == 0xd8;
+
+        boolean endsWithEoi =
+                (frame[frame.length - 2] & 0xff) == 0xff &&
+                        (frame[frame.length - 1] & 0xff) == 0xd9;
+
+        if (!startsWithSoi || !endsWithEoi) {
+            Log.w(TAG, "Dropping incomplete MJPEG frame, size=" + frame.length);
+            return;
+        }
+
+        if (callback != null) {
+            callback.onFrame(frame);
+        }
+    }
+
+    private boolean startUvcStreaming(
+            UsbDevice device,
+            UsbDeviceConnection connection,
+            int streamingInterfaceId
+    ) {
+        UvcMode mode = UvcModeFinder.findBestMjpegMode(connection);
+
+        if (mode == null) {
+            Log.e(TAG, "No MJPEG mode found");
+            return false;
+        }
+
+        Log.i(TAG, "Using MJPEG mode: " +
+                mode.width + "x" + mode.height +
+                ", formatIndex=" + mode.formatIndex +
+                ", frameIndex=" + mode.frameIndex +
+                ", interval=" + mode.frameInterval +
+                ", maxFrameSize=" + mode.maxFrameSize);
+
         byte[] probe = new byte[26];
 
-        // Fill PROBE structure
-        probe[0] = 0x01; // bmHint
-        probe[2] = 0x01; // bFormatIndex (e.g., YUY2 or MJPEG format)
-        probe[3] = 0x01; // bFrameIndex (first frame type)
-        // dwFrameInterval (e.g., 333333 for 30 fps) little endian
-        probe[4] = (byte) (0x15);
-        probe[5] = (byte) (0x16);
-        probe[6] = (byte) (0x05);
-        probe[7] = (byte) (0x00);
-        // dwMaxVideoFrameSize: (e.g., 640*480*2 = 614400 bytes)
-        probe[18] = (byte) (0x00);
-        probe[19] = (byte) (0x64);
-        probe[20] = (byte) (0x09);
-        probe[21] = (byte) (0x00);
-        // dwMaxPayloadTransferSize
-        probe[22] = (byte) (maxPayload & 0xff);
-        probe[23] = (byte) ((maxPayload >> 8) & 0xff);
+        // bmHint: 0 means let the device adjust fields if needed.
+        // 1 means dwFrameInterval is important.
+        probe[0] = 0x01;
+        probe[1] = 0x00;
+
+        // Use real descriptor values, not hardcoded 1/1.
+        probe[2] = (byte) mode.formatIndex;
+        probe[3] = (byte) mode.frameIndex;
+
+        putLe32(probe, 4, mode.frameInterval);
+
+        // bytes 8-17 are optional bitrate/clock fields; leave as 0.
+        putLe32(probe, 18, mode.maxFrameSize);
+
+        int maxPayload;
+        if (endpointIn != null) {
+            maxPayload = endpointIn.getMaxPacketSize();
+        } else {
+            maxPayload = 1024;
+        }
+
+        putLe32(probe, 22, maxPayload);
 
         int requestType = USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE;
 
         int result = connection.controlTransfer(
                 requestType,
                 SET_CUR,
-                (VS_PROBE_CONTROL << 8),
-                vsInterface.getId(),
+                VS_PROBE_CONTROL << 8,
+                streamingInterfaceId,
                 probe,
                 probe.length,
                 1000
@@ -161,12 +233,11 @@ public class UvcCaptureManager {
             return false;
         }
 
-        // Repeat same PROBE buffer for COMMIT
         result = connection.controlTransfer(
                 requestType,
                 SET_CUR,
-                (VS_COMMIT_CONTROL << 8),
-                vsInterface.getId(),
+                VS_COMMIT_CONTROL << 8,
+                streamingInterfaceId,
                 probe,
                 probe.length,
                 1000
@@ -177,44 +248,71 @@ public class UvcCaptureManager {
             return false;
         }
 
-        UsbInterface altInterface = findStreamingAltInterface(device, streamingInterfaceIndex, 1);
+        UsbInterface altInterface = findBestStreamingAltInterface(device, streamingInterfaceId);
 
-        if (altInterface == null) {
-            Log.w(TAG, "Alternate setting 1 not found, falling back to default interface");
-            altInterface = findStreamingAltInterface(device, streamingInterfaceIndex, 0);
-            if (altInterface == null) {
-                Log.e(TAG, "Alternate setting 0 not found either");
+        if (altInterface != null && altInterface != intf) {
+            connection.releaseInterface(intf);
+
+            if (!connection.claimInterface(altInterface, true)) {
+                Log.e(TAG, "Failed to claim alternate interface " +
+                        altInterface.getAlternateSetting());
                 return false;
             }
+
+            intf = altInterface;
         }
 
-        connection.releaseInterface(intf);
-
-        boolean success = connection.claimInterface(altInterface, true);
-        if (!success) {
-            Log.e(TAG, "Failed to claim interface (alt setting " + altInterface.getAlternateSetting() + ")");
-            return false;
-        }
-
-        Log.i(TAG, "UVC streaming started using alternate setting " + altInterface.getAlternateSetting());
+        Log.i(TAG, "UVC streaming started");
         return true;
     }
 
-    private UsbInterface findStreamingAltInterface(UsbDevice device, int baseInterfaceIndex, int alternateSetting) {
+    private UsbInterface findBestStreamingAltInterface(
+            UsbDevice device,
+            int interfaceId
+    ) {
+        UsbInterface best = null;
+
         for (int i = 0; i < device.getInterfaceCount(); i++) {
             UsbInterface iface = device.getInterface(i);
-            if (iface.getId() == baseInterfaceIndex && iface.getAlternateSetting() == alternateSetting) {
-                return iface;
+
+            if (iface.getId() != interfaceId) {
+                continue;
+            }
+
+            if (iface.getAlternateSetting() == 0) {
+                continue;
+            }
+
+            if (best == null ||
+                    iface.getAlternateSetting() > best.getAlternateSetting()) {
+                best = iface;
             }
         }
-        return null;
+
+        return best;
     }
 
     public void stop() {
         capturing = false;
-        if (connection != null && intf != null) {
-            connection.releaseInterface(intf);
-            connection.close();
+
+        if (captureThread != null) {
+            captureThread.interrupt();
+            captureThread = null;
         }
+
+        if (connection != null) {
+            try {
+                if (intf != null) {
+                    connection.releaseInterface(intf);
+                }
+            } catch (Exception ignored) {
+            }
+
+            connection.close();
+            connection = null;
+        }
+
+        endpointIn = null;
+        intf = null;
     }
 }

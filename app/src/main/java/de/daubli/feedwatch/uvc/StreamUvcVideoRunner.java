@@ -34,6 +34,8 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     private final AtomicReference<Frame> latestFrame = new AtomicReference<>();
 
+    private final AtomicReference<byte[]> latestCompressedFrame = new AtomicReference<>();
+
     private final FramingHelperOverlayView framingHelperOverlayView;
 
     private volatile boolean running = true;
@@ -64,6 +66,7 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
     public void run() {
         captureManager.start(data -> {
             if (!decodeInProgress.compareAndSet(false, true)) {
+                latestCompressedFrame.set(data.clone());
                 return;
             }
 
