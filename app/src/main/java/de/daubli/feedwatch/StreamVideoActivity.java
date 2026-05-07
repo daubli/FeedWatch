@@ -192,6 +192,11 @@ public class StreamVideoActivity extends AppCompatActivity {
     }
 
     private void initializeTallyButton() {
+        if (videoSource instanceof UVCSource) {
+            viewBinding.gridButton.setVisibility(View.GONE);
+            return;
+        }
+
         viewBinding.tallyButton.setOnClickListener(view -> {
             SettingsStore settingsStore = new SettingsStore();
 
