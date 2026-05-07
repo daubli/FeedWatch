@@ -1,6 +1,6 @@
 # FeedWatch
 
-Android App to view an [NDI®](http://ndi.tv/)-Stream on an Android mobile phone.
+Android App to view an [NDI®](http://ndi.tv/)- or UVC (**U**SB **V**ideo **C**lass Device) Feed on an Android mobile phone.
 
 This project was renamed from NDIMonitor to FeedWatch to avoid confusion with the official 
 NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vizrt ;)
@@ -9,23 +9,33 @@ NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vi
 
 ### Video Sources
 
-- **Full NDI® Monitoring**
-    - Supports full NDI® sources (⚠️ NDI® HX is **not** supported).
-    - The following color formats (FourCC) are supported:
-        - **BGRA** (32-bit, 8 bits per channel with Alpha)
-        - **UYVY** (16-bit, 8 bits per channel - no Alpha)
-        - **RGBA** (32-bit, 8 bits per channel with Alpha)
+- **NDI® High Bandwidth Monitoring**
+    - Supports NDI® High Bandwidth sources
     - Since NDI® can be network-intensive, using a **USB-C Ethernet adapter** is strongly recommended.
+    - **NDI® HX** is currently not supported. I invested some effort and implemented
+  a working prototype. However, in order to receive NDI® HX streams for
+  longer than 5 minutes, you need currently a NDI® Advanced SDK license.
+  Even if I had a license - which I do not - publishing the source code
+  would not be useful, because I would not be able to publish the license
+  itself. Anyone who wanted to use this functionality would need to obtain
+  the appropriate license independently.
 
 - **UVC HDMI Capture Cards**  
   The app can capture video from **UVC-compatible devices**, such as USB HDMI capture cards.  
   This functionality was developed and tested with a low-cost **UGREEN Video Capture Card** (Amazon), which performed
   reliably.  
   Any supported UVC device will automatically appear as an available source.
-
+ 
 ---
 
 ## Monitoring Tools
+
+
+### NDI Tally
+
+- Displays NDI® tally information (red for program /green for preview) for NDI sources
+
+![NDI Tally Example](img/tally-red.jpeg)
 
 ### Focus Peaking
 
