@@ -1,9 +1,13 @@
 package de.daubli.feedwatch;
 
+import android.content.Intent;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.*;
 import androidx.appcompat.app.AppCompatActivity;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
@@ -15,6 +19,8 @@ import de.daubli.feedwatch.uvc.StreamUvcVideoRunner;
 import de.daubli.feedwatch.uvc.UVCSource;
 
 public class StreamVideoActivity extends AppCompatActivity {
+
+    private static final String TAG = "StreamVideoActivity";
 
     private static final long MENU_HIDE_DELAY_MS = 5000;
 
@@ -34,11 +40,43 @@ public class StreamVideoActivity extends AppCompatActivity {
         viewBinding = StreamVideoActivityBinding.inflate(getLayoutInflater());
         setContentView(viewBinding.getRoot());
 
-        videoSource = MainActivity.getSource();
+        videoSource = resolveVideoSource(getIntent());
+
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         initMenu();
         setFullScreen();
         initSavedState();
+    }
+
+    private VideoSource resolveVideoSource(Intent intent) {
+        UsbDevice usbDevice = null;
+
+        if (intent != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                usbDevice = intent.getParcelableExtra(
+                        UsbManager.EXTRA_DEVICE,
+                        UsbDevice.class
+                );
+            } else {
+                usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+            }
+        }
+
+        if (usbDevice != null) {
+            Log.d(TAG, "Starting from USB device: "
+                    + usbDevice.getDeviceName()
+                    + ", vendorId=" + usbDevice.getVendorId()
+                    + ", productId=" + usbDevice.getProductId());
+            return new UVCSource(usbDevice);
+        }
+
+        VideoSource source = MainActivity.getSource();
+
+        if (source == null) {
+            Log.e(TAG, "No VideoSource available");
+        }
+
+        return source;
     }
 
     private void initMenu() {
@@ -176,7 +214,11 @@ public class StreamVideoActivity extends AppCompatActivity {
     }
 
     private void closeVideoActivity() {
-        runner.shutdown();
+        if (runner != null) {
+            runner.shutdown();
+        } else {
+            finish();
+        }
     }
 
     private void setFullScreen() {
@@ -200,12 +242,29 @@ public class StreamVideoActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
+        if (videoSource == null) {
+            finish();
+            return;
+        }
+
         if (videoSource instanceof NdiSource) {
             runner = new StreamNDIVideoRunner((NdiSource) videoSource, viewBinding, this);
             runner.start();
-        } else {
+        } else if (videoSource instanceof UVCSource) {
             runner = new StreamUvcVideoRunner((UVCSource) videoSource, viewBinding, this);
             runner.start();
+        } else {
+            finish();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        if (runner != null) {
+            runner.shutdown();
+            runner = null;
         }
     }
 }

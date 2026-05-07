@@ -12,9 +12,12 @@ import com.google.android.material.snackbar.Snackbar;
 
 import android.content.Intent;
 import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -94,6 +97,56 @@ public class MainActivity extends AppCompatActivity {
 
         swipeRefreshLayout.setColorSchemeResources(R.color.cardview_shadow_end_color);
         swipeRefreshLayout.setOnRefreshListener(this::triggerManualRefresh);
+
+        handleUsbIntent(getIntent());
+    }
+
+    private void handleUsbIntent(Intent intent) {
+        if (intent == null) return;
+
+        if (!UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
+            return;
+        }
+
+        UsbDevice device;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            device = intent.getParcelableExtra(
+                    UsbManager.EXTRA_DEVICE,
+                    UsbDevice.class
+            );
+        } else {
+            device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+        }
+
+        if (device == null) {
+            Log.e("MainActivity", "USB attach intent without device");
+            return;
+        }
+
+        Log.d("MainActivity", "USB attached: "
+                + device.getDeviceName()
+                + ", vendorId=" + device.getVendorId()
+                + ", productId=" + device.getProductId());
+
+        UsbDevicePermissionHandler permissionHandler =
+                new UsbDevicePermissionHandler(this);
+
+        permissionHandler.requestPermission(device, new UsbDevicePermissionHandler.Callback() {
+            @Override
+            public void onPermissionGranted(UsbDevice grantedDevice) {
+                // Add it to your source list, or directly open StreamVideoActivity.
+                Intent streamIntent = new Intent(MainActivity.this, StreamVideoActivity.class);
+                streamIntent.putExtra(UsbManager.EXTRA_DEVICE, grantedDevice);
+                startActivity(streamIntent);
+            }
+
+            @Override
+            public void onPermissionDenied(UsbDevice deniedDevice) {
+                Log.w("MainActivity", "USB permission denied: "
+                        + deniedDevice.getDeviceName());
+            }
+        });
     }
 
     @Override
@@ -260,6 +313,7 @@ public class MainActivity extends AppCompatActivity {
 
                     @Override
                     public void onPermissionGranted(UsbDevice device) {
+                        selectVideoSource(new UVCSource(device));
                         beginStreaming();
                     }
 
