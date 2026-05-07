@@ -32,7 +32,7 @@
 			android:layout_gravity="bottom"
 			android:orientation="horizontal"
 			android:layout_marginEnd="16dp"
-			android:visibility="invisible"
+			android:visibility="gone"
 			android:background="#80000000"
 	>
 

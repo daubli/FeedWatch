@@ -16,6 +16,8 @@ import de.daubli.feedwatch.uvc.UVCSource;
 
 public class StreamVideoActivity extends AppCompatActivity {
 
+    private static final long MENU_HIDE_DELAY_MS = 5000;
+
     private StreamVideoActivityBinding viewBinding;
 
     private VideoSource videoSource;
@@ -71,18 +73,36 @@ public class StreamVideoActivity extends AppCompatActivity {
         }
     }
 
+    private void showMenuAndScheduleHide() {
+        viewBinding.menuLayout.setVisibility(View.VISIBLE);
+        viewBinding.menuLayout.bringToFront();
+
+        menuHandler.removeCallbacks(hideMenuCallback);
+        menuHandler.postDelayed(hideMenuCallback, MENU_HIDE_DELAY_MS);
+    }
+
+    private void hideMenuNow() {
+        menuHandler.removeCallbacks(hideMenuCallback);
+        viewBinding.menuLayout.setVisibility(View.GONE);
+    }
+
+    private void extendMenuTimeout() {
+        menuHandler.removeCallbacks(hideMenuCallback);
+        menuHandler.postDelayed(hideMenuCallback, MENU_HIDE_DELAY_MS);
+    }
+
     private void initShowHideMenu() {
         this.menuHandler = new Handler(Looper.getMainLooper());
         this.hideMenuCallback = () -> viewBinding.menuLayout.setVisibility(View.GONE);
-        viewBinding.openGLVideoView.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                viewBinding.menuLayout.setVisibility(View.VISIBLE);
-                viewBinding.menuLayout.bringToFront();
-                menuHandler.removeCallbacks(hideMenuCallback);
-                menuHandler.postDelayed(hideMenuCallback, 5000);
-                v.performClick();
+
+        viewBinding.menuLayout.setOnClickListener(v -> extendMenuTimeout());
+
+        viewBinding.openGLVideoView.setOnClickListener(v -> {
+            if (viewBinding.menuLayout.getVisibility() == View.VISIBLE) {
+                hideMenuNow();
+            } else {
+                showMenuAndScheduleHide();
             }
-            return true; // you are consuming the touch
         });
     }
 
