@@ -28,8 +28,16 @@ NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vi
  
 ---
 
-## Monitoring Tools
 
+
+## Features
+
+### Low Bandwidth Mode
+
+Low Bandwidth Mode reduces network and CPU usage by using the NDI proxy stream instead of the full-resolution video feed. This mode is ideal when your android device is only connected to a wireless network. 
+While image quality is reduced compared to the full NDI stream it can nevertheless be enough to check feed existence, framing or exposure. 
+
+You can enable Low Bandwidth Mode in the app’s Settings page (Three-Dot Menu -> Settings)
 
 ### NDI Tally
 
