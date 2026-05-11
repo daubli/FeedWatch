@@ -26,11 +26,6 @@ NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vi
   reliably.  
   Any supported UVC device will automatically appear as an available source.
  
----
-
-
-
-## Features
 
 ### Low Bandwidth Mode
 
@@ -38,6 +33,10 @@ Low Bandwidth Mode reduces network and CPU usage by using the NDI proxy stream i
 While image quality is reduced compared to the full NDI stream it can nevertheless be enough to check feed existence, framing or exposure. 
 
 You can enable Low Bandwidth Mode in the app’s Settings page (Three-Dot Menu -> Settings)
+
+---
+
+## Monitoring Tools
 
 ### NDI Tally
 
