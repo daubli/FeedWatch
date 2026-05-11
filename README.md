@@ -1,6 +1,6 @@
 # FeedWatch
 
-Android App to view an [NDI®](http://ndi.tv/)- or UVC (**U**SB **V**ideo **C**lass Device) Feed on an Android mobile phone.
+Android App to view [NDI®](http://ndi.tv/)- or UVC (**U**SB **V**ideo **C**lass Device) Feed on an Android mobile phone.
 
 This project was renamed from NDIMonitor to FeedWatch to avoid confusion with the official 
 NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vizrt ;)
