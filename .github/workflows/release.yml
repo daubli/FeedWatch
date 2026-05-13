@@ -53,6 +53,30 @@ jobs:
           rm Install_NDI_SDK_v6_Android.tar.gz
           rm Install_NDI_SDK_v6_Android.sh
 
+      - name: Copy NDI Android files into project
+        run: |
+          NDI_DIR="$(find "$GITHUB_WORKSPACE" -type d -name 'NDI SDK for Android' | head -n 1)"
+
+          echo "NDI_DIR=$NDI_DIR"
+
+          if [ -z "$NDI_DIR" ]; then
+            echo "NDI SDK for Android directory not found"
+            find "$GITHUB_WORKSPACE" -maxdepth 3 -type d
+            exit 1
+          fi
+
+          mkdir -p app/src/main/cpp/include
+          mkdir -p app/src/main/jniLibs
+
+          cp -R "$NDI_DIR/include/"* app/src/main/cpp/include/
+          cp -R "$NDI_DIR/lib/"* app/src/main/jniLibs/
+
+          echo "Copied NDI headers:"
+          ls -la app/src/main/cpp/include
+
+          echo "Copied NDI libraries:"
+          find app/src/main/jniLibs -type f -name "*.so" -print
+
       - name: Grant execute permission for Gradle
         run: chmod +x gradlew
 
