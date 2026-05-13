@@ -80,16 +80,47 @@ jobs:
       - name: Grant execute permission for Gradle
         run: chmod +x gradlew
 
-      - name: Build release APK
+      - name: Decode Android signing keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+
+      - name: Build unsigned release APK
         run: ./gradlew assembleRelease
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
 
+      - name: Sign release APK
+        run: |
+          UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
+          SIGNED_APK="app/build/outputs/apk/release/feedwatch-${{ github.ref_name }}.apk"
+
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$UNSIGNED_APK" aligned.apk
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks release.keystore \
+            --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+            --ks-pass pass:"${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            --key-pass pass:"${{ secrets.ANDROID_KEY_PASSWORD }}" \
+            --out "$SIGNED_APK" \
+            aligned.apk
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$SIGNED_APK"
+
+      - name: Generate and log APK checksum
+        run: |
+          APK="app/build/outputs/apk/release/feedwatch-${{ github.ref_name }}.apk"
+
+          echo "APK file: $APK"
+          echo "SHA256 checksum:"
+          sha256sum "$APK" | tee apk.sha256
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
-          files: app/build/outputs/apk/release/*.apk
+          files: |
+            app/build/outputs/apk/release/feedwatch-${{ github.ref_name }}.apk
+            apk.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
