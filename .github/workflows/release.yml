@@ -3,7 +3,7 @@ name: Android Release
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
 
 permissions:
   contents: write
@@ -46,15 +46,23 @@ jobs:
       - name: Setup NDI Android SDK
         if: steps.cache-ndi.outputs.cache-hit != 'true'
         run: |
+          set -euo pipefail
+
           wget https://downloads.ndi.tv/SDK/NDI_SDK_Android/Install_NDI_SDK_v6_Android.tar.gz
           tar -xvf Install_NDI_SDK_v6_Android.tar.gz
+
+          chmod +x Install_NDI_SDK_v6_Android.sh
           sed -i 's/read -p/cat/g' Install_NDI_SDK_v6_Android.sh
+
           PAGER=cat REPLY=y ./Install_NDI_SDK_v6_Android.sh
-          rm Install_NDI_SDK_v6_Android.tar.gz
-          rm Install_NDI_SDK_v6_Android.sh
+
+          rm -f Install_NDI_SDK_v6_Android.tar.gz
+          rm -f Install_NDI_SDK_v6_Android.sh
 
       - name: Copy NDI Android files into project
         run: |
+          set -euo pipefail
+
           NDI_DIR="$(find "$GITHUB_WORKSPACE" -type d -name 'NDI SDK for Android' | head -n 1)"
 
           echo "NDI_DIR=$NDI_DIR"
@@ -80,8 +88,20 @@ jobs:
       - name: Grant execute permission for Gradle
         run: chmod +x gradlew
 
+      - name: Validate signing secrets
+        run: |
+          set -euo pipefail
+
+          test -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}"
+          test -n "${{ secrets.ANDROID_KEY_ALIAS }}"
+          test -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+          test -n "${{ secrets.ANDROID_KEY_PASSWORD }}"
+
       - name: Decode Android signing keystore
         run: |
+          set -euo pipefail
+          set +x
+
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
 
       - name: Build unsigned release APK
@@ -91,25 +111,38 @@ jobs:
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
 
       - name: Sign release APK
+        env:
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          set +x
+
+          VERSION="${GITHUB_REF_NAME//\//-}"
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+
           UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
-          SIGNED_APK="app/build/outputs/apk/release/feedwatch-${{ github.ref_name }}.apk"
+          SIGNED_APK="app/build/outputs/apk/release/feedwatch-$VERSION.apk"
 
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$UNSIGNED_APK" aligned.apk
+          "$BUILD_TOOLS/zipalign" -p -f 4 "$UNSIGNED_APK" aligned.apk
 
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+          "$BUILD_TOOLS/apksigner" sign \
             --ks release.keystore \
-            --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
-            --ks-pass pass:"${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            --key-pass pass:"${{ secrets.ANDROID_KEY_PASSWORD }}" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass pass:"$KEYSTORE_PASSWORD" \
+            --key-pass pass:"$KEY_PASSWORD" \
             --out "$SIGNED_APK" \
             aligned.apk
 
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$SIGNED_APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose "$SIGNED_APK"
 
       - name: Generate and log APK checksum
         run: |
-          APK="app/build/outputs/apk/release/feedwatch-${{ github.ref_name }}.apk"
+          set -euo pipefail
+
+          VERSION="${GITHUB_REF_NAME//\//-}"
+          APK="app/build/outputs/apk/release/feedwatch-$VERSION.apk"
 
           echo "APK file: $APK"
           echo "SHA256 checksum:"
@@ -124,3 +157,8 @@ jobs:
             apk.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean signing files
+        if: always()
+        run: |
+          rm -f release.keystore aligned.apk
