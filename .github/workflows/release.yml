@@ -1,0 +1,71 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          link-to-sdk: true
+          local-cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build unzip wget
+
+      - name: Cache NDI Android SDK
+        id: cache-ndi
+        uses: actions/cache@v4
+        with:
+          path: "NDI SDK*"
+          key: ${{ runner.os }}-ndi-android-v6
+
+      - name: Setup NDI Android SDK
+        if: steps.cache-ndi.outputs.cache-hit != 'true'
+        run: |
+          wget https://downloads.ndi.tv/SDK/NDI_SDK_Android/Install_NDI_SDK_v6_Android.tar.gz
+          tar -xvf Install_NDI_SDK_v6_Android.tar.gz
+          sed -i 's/read -p/cat/g' Install_NDI_SDK_v6_Android.sh
+          PAGER=cat REPLY=y ./Install_NDI_SDK_v6_Android.sh
+          rm Install_NDI_SDK_v6_Android.tar.gz
+          rm Install_NDI_SDK_v6_Android.sh
+
+      - name: Grant execute permission for Gradle
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
