@@ -16,7 +16,7 @@ public class AudioRingBuffer {
     }
 
     // write returns false if full
-    public boolean write(byte[] data) {
+    public synchronized boolean write(byte[] data) {
         int nextWrite = (writeIndex + 1) % capacity;
         if (nextWrite == readIndex) {
             return false; // full
@@ -27,11 +27,12 @@ public class AudioRingBuffer {
     }
 
     // read returns null if empty
-    public byte[] read() {
+    public synchronized byte[] read() {
         if (readIndex == writeIndex) {
             return null; // empty
         }
-        byte[] data = buffer[readIndex];
+        // copy so the writer can't overwrite the slot while it is being played
+        byte[] data = buffer[readIndex].clone();
         readIndex = (readIndex + 1) % capacity;
         return data;
     }
