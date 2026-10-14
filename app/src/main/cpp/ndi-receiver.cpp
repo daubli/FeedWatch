@@ -4,15 +4,13 @@
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCreate(JNIEnv* env, jclass /*clazz*/, jboolean useLowBandwidth)
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCreate(JNIEnv* env, jclass /*clazz*/, jint bandwidth)
 {
     NDIlib_recv_create_v3_t recv_create_struct;
     std::memset(&recv_create_struct, 0, sizeof(recv_create_struct));
 	recv_create_struct.color_format = NDIlib_recv_color_format_UYVY_BGRA;
 
-    bool lowBandwidth = (useLowBandwidth == JNI_TRUE);
-
-    recv_create_struct.bandwidth = lowBandwidth ? NDIlib_recv_bandwidth_lowest : NDIlib_recv_bandwidth_highest;
+    recv_create_struct.bandwidth = static_cast<NDIlib_recv_bandwidth_e>(bandwidth);
 
     recv_create_struct.allow_video_fields = true;
     recv_create_struct.source_to_connect_to = nullptr;
@@ -61,6 +59,31 @@ Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveDestroy(JNIEnv* env, jclass /*cl
     auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
     if (!recv) return;
     NDIlib_recv_destroy(recv);
+}
+
+/**
+ * Waits up to timeoutMs for the next audio frame. Returns true if one was captured; it must then be freed with
+ * receiveFreeAudio.
+ */
+JNIEXPORT jboolean JNICALL
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCaptureAudio(
+    JNIEnv* env, jclass /*clazz*/, jlong pReceiver, jlong pFrame, jint timeoutMs)
+{
+    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
+    auto frame = reinterpret_cast<NDIlib_audio_frame_v2_t *>(pFrame);
+    if (!recv || !frame) return JNI_FALSE;
+
+    auto type = NDIlib_recv_capture_v2(recv, nullptr, frame, nullptr, timeoutMs);
+    return type == NDIlib_frame_type_audio ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveFreeAudio(JNIEnv* env, jclass /*clazz*/, jlong pReceiver, jlong pFrame)
+{
+    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
+    auto frame = reinterpret_cast<NDIlib_audio_frame_v2_t *>(pFrame);
+    if (!recv || !frame) return;
+    NDIlib_recv_free_audio_v2(recv, frame);
 }
 
 static bool attr_is_true(const char* xml, const char* attr) {

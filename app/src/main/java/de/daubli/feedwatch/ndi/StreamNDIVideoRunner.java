@@ -1,6 +1,7 @@
 package de.daubli.feedwatch.ndi;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -14,8 +15,6 @@ import android.view.View;
 import android.widget.Toast;
 import de.daubli.feedwatch.StreamVideoActivity;
 import de.daubli.feedwatch.StreamVideoRunner;
-import de.daubli.feedwatch.audio.AudioRingBuffer;
-import de.daubli.feedwatch.audio.AudioUtils;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
 import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.view.base.OpenGLVideoView;
@@ -26,11 +25,28 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private static final String TAG = "StreamNDI";
 
-    private static final int SAMPLE_RATE = 48_000;
-
-    private static final int CHANNEL_COUNT = 2;
-
     private static final int VIDEO_FRAME_POOL_SIZE = 4;
+
+    private static final int AUDIO_BYTES_PER_FRAME = 4; // 16-bit stereo
+
+    private static final int AUDIO_CAPTURE_TIMEOUT_MS = 100;
+
+    // AudioTrack buffer: absorbs network jitter, so it is generous
+    private static final int AUDIO_TRACK_BUFFER_MS = 500;
+
+    // buffered before playback starts, enough to ride out gaps between NDI audio packets on Wi-Fi (seen up to
+    // ~185 ms); together with the output pipeline this is the audio latency
+    private static final int AUDIO_PREFILL_MS = 200;
+
+    // playback time after which the buffer level is taken as the level to hold
+    private static final int AUDIO_SETTLE_MS = 3000;
+
+    // time constant of the buffer level average; arrival and playback both come in bursts
+    private static final double AUDIO_FILL_AVERAGE_SECONDS = 1.0;
+
+    // Sender and DAC clocks differ by some ppm. The playback rate is trimmed by at most this much to hold the buffer
+    // level; 0.1 % is far below an audible pitch change.
+    private static final double AUDIO_MAX_RATE_CORRECTION = 0.001;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -48,19 +64,19 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private NdiFrameSync frameSync;
 
-    private AudioTrack audioTrack;
+    // separate audio-only connection, see startAudioThread()
+    private NdiReceiver audioReceiver;
+
+    // created by the audio thread, released after it has exited
+    private volatile AudioTrack audioTrack;
 
     private Choreographer choreographer;
 
     private volatile boolean running = true;
 
-    private volatile boolean firstAudioFrameReceived = false;
-
     private boolean firstFramePending = true;
 
     private Thread audioThread;
-
-    private Thread audioCaptureThread;
 
     private Thread videoCaptureThread;
 
@@ -74,8 +90,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     private volatile boolean videoFramesReleased = false;
 
     private NdiVideoFrame captureFrame;
-
-    private final AudioRingBuffer ringBuffer = new AudioRingBuffer(20, 4000 * 2 * CHANNEL_COUNT);
 
     // Ensure we fail only once and don't spam UI/logs
     private final AtomicBoolean renderFailed = new AtomicBoolean(false);
@@ -102,8 +116,9 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             }
             captureFrame = freeFrames.poll();
 
-            initAudio();
-            startAudioCaptureThread();
+            audioReceiver = NdiReceiver.audioOnly();
+            audioReceiver.connect(ndiSource);
+
             startAudioThread();
             startVideoCaptureThread();
             startTallyCaptureThread();
@@ -125,7 +140,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
         // Interrupt threads so they can exit quickly (especially if sleeping)
         interruptThread(audioThread);
-        interruptThread(audioCaptureThread);
         interruptThread(videoCaptureThread);
         interruptThread(tallyCaptureThread);
 
@@ -140,7 +154,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         new Thread(() -> {
             joinThread(tallyCaptureThread);
             joinThread(videoCaptureThread);
-            joinThread(audioCaptureThread);
             joinThread(audioThread);
 
             mainHandler.post(() -> {
@@ -149,98 +162,150 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 safeReleaseVideoFrames();
                 safeCloseFrameSync();
                 safeCloseReceiver();
+                safeCloseAudioReceiver();
                 activity.finish();
             });
         }, "NDI-Shutdown").start();
     }
 
-    private void initAudio() {
-        int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_STEREO,
+    private static AudioTrack createAudioTrack(int sampleRate) {
+        int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_STEREO,
                 AudioFormat.ENCODING_PCM_16BIT);
+        int bufferSize = Math.max(minBufferSize, sampleRate * AUDIO_TRACK_BUFFER_MS / 1000 * AUDIO_BYTES_PER_FRAME);
 
-        audioTrack = new AudioTrack.Builder().setAudioAttributes(
+        return new AudioTrack.Builder().setAudioAttributes(
                         new AudioAttributes.Builder().setLegacyStreamType(AudioManager.STREAM_MUSIC).build()).setAudioFormat(
-                        new AudioFormat.Builder().setSampleRate(SAMPLE_RATE).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build()).setBufferSizeInBytes(minBufferSize * 8)
+                        new AudioFormat.Builder().setSampleRate(sampleRate).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build()).setBufferSizeInBytes(bufferSize)
                 .setTransferMode(AudioTrack.MODE_STREAM).build();
-
-        audioTrack.play();
     }
 
+    /**
+     * Plays audio from the audio-only receiver. Audio is not taken from the frame sync: its resampler follows both
+     * the timing of the calls and the burstiness of network arrival, which is audible as wavering pitch. Instead
+     * frames are queued on the AudioTrack as they arrive, so network jitter only changes how full its buffer is,
+     * and the playback rate is trimmed by at most 0.1 % to hold the buffer level against clock drift.
+     */
     private void startAudioThread() {
         audioThread = new Thread(() -> {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
-            try {
-                while (running && !Thread.currentThread().isInterrupted()) {
-                    byte[] frameData = ringBuffer.read();
-                    if (frameData != null) {
-                        try {
-                            if (audioTrack != null) {
-                                audioTrack.write(frameData, 0, frameData.length);
-                            }
-                        } catch (Throwable t) {
-                            Log.e(TAG, "AudioTrack write failed", t);
-                            // Audio failure shouldn't be "unsupported format", just stop cleanly
-                            failWithMessage("Audio playback failed.");
-                            return;
-                        }
-                    } else {
-                        // avoid tight spin
-                        Thread.sleep(2);
-                    }
-                }
-            } catch (InterruptedException ignored) {
-                // exit
-            }
-        }, "NDI-AudioTrack");
-
-        audioThread.start();
-    }
-
-    private void startAudioCaptureThread() {
-        audioCaptureThread = new Thread(() -> {
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
             NdiAudioFrame audioFrame = new NdiAudioFrame();
+            ByteBuffer pcm = null;
+
+            AudioTrack track = null;
+            int trackSampleRate = 0;
+            int playbackRate = 0;
+            long framesWritten = 0;
+            double fillAverage = 0;
+            double targetFill = -1;
+            long lastFillUpdate = 0;
+            boolean playing = false;
 
             try {
                 while (running && !Thread.currentThread().isInterrupted()) {
-                    try {
-                        if (frameSync == null) {
-                            Thread.sleep(2);
-                            continue;
+                    NdiReceiver source = audioReceiver;
+                    if (source == null) {
+                        break;
+                    }
+                    if (!source.captureAudio(audioFrame, AUDIO_CAPTURE_TIMEOUT_MS)) {
+                        continue;
+                    }
+
+                    int sampleRate = audioFrame.getSampleRate();
+                    int samples = audioFrame.getSamples();
+                    int channels = audioFrame.getChannels();
+                    if (sampleRate <= 0 || samples <= 0 || channels <= 0) {
+                        audioFrame.freeBuffer();
+                        continue;
+                    }
+
+                    if (track == null || sampleRate != trackSampleRate) {
+                        // the AudioTrack runs at the sender's sample rate, Android resamples to the device
+                        if (track != null) {
+                            track.release();
                         }
+                        track = createAudioTrack(sampleRate);
+                        audioTrack = track;
+                        trackSampleRate = sampleRate;
+                        playbackRate = sampleRate;
+                        framesWritten = 0;
+                        targetFill = -1;
+                        playing = false;
+                    }
 
-                        frameSync.captureAudio(audioFrame, SAMPLE_RATE, CHANNEL_COUNT, 4000);
+                    // converted natively: per-sample work in Java is far too slow here
+                    int bytes = samples * AUDIO_BYTES_PER_FRAME;
+                    if (pcm == null || pcm.capacity() < bytes) {
+                        pcm = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder());
+                    }
+                    int size = audioFrame.toStereoPcm16(pcm, null);
+                    audioFrame.freeBuffer();
+                    if (size <= 0) {
+                        continue;
+                    }
+                    pcm.clear();
+                    pcm.limit(size);
 
-                        ByteBuffer pcm = AudioUtils.convertPlanarFloatToInterleavedPCM16(audioFrame.getData(),
-                                audioFrame.getChannels());
 
-                        if (pcm != null && pcm.remaining() > 0) {
-                            firstAudioFrameReceived = true;
+                    long prefillFrames = (long) trackSampleRate * AUDIO_PREFILL_MS / 1000;
+                    if (playing) {
+                        // written minus played (an unsigned 32-bit frame counter); includes the output pipeline's
+                        // latency, so only the level it settles at is known, not what it should be
+                        int head = track.getPlaybackHeadPosition();
+                        long fill = (framesWritten - head) & 0xFFFFFFFFL;
+                        long now = System.nanoTime();
+                        double alpha = Math.min(1.0, (now - lastFillUpdate) / 1e9 / AUDIO_FILL_AVERAGE_SECONDS);
+                        lastFillUpdate = now;
+                        fillAverage += alpha * (fill - fillAverage);
 
-                            byte[] data = new byte[pcm.remaining()];
-                            pcm.get(data);
-
-                            if (!AudioUtils.isSilentFast(data)) {
-                                ringBuffer.write(data);
+                        if (targetFill < 0 && (head & 0xFFFFFFFFL) >= (long) trackSampleRate * AUDIO_SETTLE_MS / 1000) {
+                            targetFill = fillAverage;
+                        }
+                        if (targetFill > 0) {
+                            double excess = fillAverage - targetFill;
+                            if (excess > prefillFrames) {
+                                // a burst left far more buffered than needed: drop a packet rather than keep the
+                                // extra latency
+                                Log.d(TAG, "Dropping audio packet, buffer " + Math.round(excess) + " frames over target");
+                                fillAverage -= samples;
+                                continue;
+                            }
+                            double correction = Math.max(-AUDIO_MAX_RATE_CORRECTION,
+                                    Math.min(AUDIO_MAX_RATE_CORRECTION, excess / prefillFrames * AUDIO_MAX_RATE_CORRECTION));
+                            int rate = (int) Math.round(trackSampleRate * (1.0 + correction));
+                            if (rate != playbackRate) {
+                                track.setPlaybackRate(rate);
+                                playbackRate = rate;
                             }
                         }
+                    }
 
-                        Thread.sleep(2);
-                    } catch (InterruptedException ie) {
-                        break;
-                    } catch (Throwable t) {
-                        Log.e(TAG, "Audio capture failed", t);
-                        failWithMessage("Audio capture failed.");
+                    // a full buffer only happens after a long stall; the excess is dropped
+                    int written = track.write(pcm, size, AudioTrack.WRITE_NON_BLOCKING);
+                    if (written < 0) {
+                        Log.e(TAG, "AudioTrack write failed: " + written);
+                        failWithMessage("Audio playback failed.");
                         return;
                     }
-                }
-            } finally {
-                // nothing special
-            }
-        }, "NDI-Audio-Capture");
+                    framesWritten += written / AUDIO_BYTES_PER_FRAME;
 
-        audioCaptureThread.start();
+                    if (!playing && framesWritten >= prefillFrames) {
+                        track.play();
+                        playing = true;
+                        fillAverage = framesWritten;
+                        lastFillUpdate = System.nanoTime();
+                    }
+                }
+            } catch (Throwable t) {
+                Log.e(TAG, "Audio playback failed", t);
+                failWithMessage("Audio playback failed.");
+            } finally {
+                audioFrame.freeBuffer();
+                audioFrame.close();
+            }
+        }, "NDI-Audio");
+
+        audioThread.start();
     }
 
     private void startVideoCaptureThread() {
@@ -289,7 +354,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
             final NdiVideoFrame frame = renderFrame.getAndSet(null);
             if (frame != null) {
-                if (firstFramePending && firstAudioFrameReceived) {
+                if (firstFramePending) {
                     videoView.setVisibility(View.VISIBLE);
                     firstFramePending = false;
                 }
@@ -490,6 +555,17 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         } catch (Throwable ignored) {
         }
         frameSync = null;
+    }
+
+    private void safeCloseAudioReceiver() {
+        if (audioReceiver == null) {
+            return;
+        }
+        try {
+            audioReceiver.close();
+        } catch (Throwable ignored) {
+        }
+        audioReceiver = null;
     }
 
     private void safeCloseReceiver() {
