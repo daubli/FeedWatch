@@ -1,6 +1,7 @@
 package de.daubli.feedwatch.ndi;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -28,6 +29,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     private static final int SAMPLE_RATE = 48_000;
 
     private static final int CHANNEL_COUNT = 2;
+
+    private static final int VIDEO_FRAME_POOL_SIZE = 4;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -65,6 +68,11 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private final AtomicReference<NdiVideoFrame> renderFrame = new AtomicReference<>();
 
+    // Frames are only reused once the GL thread has uploaded them
+    private final ArrayBlockingQueue<NdiVideoFrame> freeFrames = new ArrayBlockingQueue<>(VIDEO_FRAME_POOL_SIZE);
+
+    private volatile boolean videoFramesReleased = false;
+
     private NdiVideoFrame captureFrame;
 
     private final AudioRingBuffer ringBuffer = new AudioRingBuffer(20, 4000 * 2 * CHANNEL_COUNT);
@@ -89,8 +97,10 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
             frameSync = new NdiFrameSync(receiver);
 
-            captureFrame = new NdiVideoFrame();
-            renderFrame.set(new NdiVideoFrame());
+            for (int i = 0; i < VIDEO_FRAME_POOL_SIZE; i++) {
+                freeFrames.offer(new NdiVideoFrame());
+            }
+            captureFrame = freeFrames.poll();
 
             initAudio();
             startAudioCaptureThread();
@@ -129,6 +139,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         // Release resources (AudioTrack should be handled on main thread to avoid UI races in some implementations)
         mainHandler.post(() -> {
             safeReleaseAudioTrack();
+            // frames must be freed before the frame sync that owns their buffers
+            safeReleaseVideoFrames();
             safeCloseFrameSync();
             safeCloseReceiver();
             activity.finish();
@@ -235,8 +247,12 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                         }
 
                         if (frameSync.captureVideo(captureFrame)) {
-                            NdiVideoFrame old = renderFrame.getAndSet(captureFrame);
-                            captureFrame = old;
+                            NdiVideoFrame skipped = renderFrame.getAndSet(captureFrame);
+                            if (skipped != null) {
+                                recycleFrame(skipped);
+                            }
+                            // blocks until the GL thread hands a frame back
+                            captureFrame = freeFrames.take();
                         } else {
                             Thread.sleep(2);
                         }
@@ -264,7 +280,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 return;
             }
 
-            NdiVideoFrame frame = renderFrame.get();
+            final NdiVideoFrame frame = renderFrame.getAndSet(null);
             if (frame != null) {
                 if (firstFramePending && firstAudioFrameReceived) {
                     videoView.setVisibility(View.VISIBLE);
@@ -273,19 +289,22 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
                 try {
                     if (!isFrameRenderable(frame)) {
+                        recycleFrame(frame);
                         // skip bad frames quietly
                         reschedule();
                         return;
                     }
 
                     videoView.updateFrame(frame.getData(), frame.getXResolution(), frame.getYResolution(),
-                            frame.getFourCCType());
+                            frame.getFourCCType(), () -> recycleFrame(frame));
                     framingHelperOverlayView.setFramingRect(videoView.getVideoRect());
 
                 } catch (UnsupportedOperationException e) {
+                    recycleFrame(frame);
                     failUnsupportedFormat(frame.getFourCCTypeId(), e);
                     return;
                 } catch (Throwable t) {
+                    recycleFrame(frame);
                     Log.e(TAG, "Rendering failed", t);
                     failWithMessage("Rendering failed.");
                     return;
@@ -397,6 +416,13 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         }
     }
 
+    private void recycleFrame(NdiVideoFrame frame) {
+        // frames handed back by the GL thread after teardown are dropped
+        if (!videoFramesReleased) {
+            freeFrames.offer(frame);
+        }
+    }
+
     private void safeReleaseAudioTrack() {
         if (audioTrack == null) {
             return;
@@ -410,6 +436,31 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         } catch (Throwable ignored) {
         }
         audioTrack = null;
+    }
+
+    private void safeReleaseVideoFrames() {
+        if (videoFramesReleased) {
+            return;
+        }
+        videoFramesReleased = true;
+
+        NdiVideoFrame frame;
+        while ((frame = freeFrames.poll()) != null) {
+            safeCloseFrame(frame);
+        }
+        safeCloseFrame(captureFrame);
+        captureFrame = null;
+        safeCloseFrame(renderFrame.getAndSet(null));
+    }
+
+    private void safeCloseFrame(NdiVideoFrame frame) {
+        if (frame == null) {
+            return;
+        }
+        try {
+            frame.close();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void safeCloseFrameSync() {
