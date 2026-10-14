@@ -136,15 +136,22 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             }
         });
 
-        // Release resources (AudioTrack should be handled on main thread to avoid UI races in some implementations)
-        mainHandler.post(() -> {
-            safeReleaseAudioTrack();
-            // frames must be freed before the frame sync that owns their buffers
-            safeReleaseVideoFrames();
-            safeCloseFrameSync();
-            safeCloseReceiver();
-            activity.finish();
-        });
+        // Wait for all threads using the native receiver to exit before destroying it
+        new Thread(() -> {
+            joinThread(tallyCaptureThread);
+            joinThread(videoCaptureThread);
+            joinThread(audioCaptureThread);
+            joinThread(audioThread);
+
+            mainHandler.post(() -> {
+                safeReleaseAudioTrack();
+                // frames must be freed before the frame sync that owns their buffers
+                safeReleaseVideoFrames();
+                safeCloseFrameSync();
+                safeCloseReceiver();
+                activity.finish();
+            });
+        }, "NDI-Shutdown").start();
     }
 
     private void initAudio() {
@@ -413,6 +420,17 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     private void interruptThread(Thread t) {
         if (t != null) {
             t.interrupt();
+        }
+    }
+
+    private void joinThread(Thread t) {
+        if (t == null) {
+            return;
+        }
+        try {
+            t.join(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
