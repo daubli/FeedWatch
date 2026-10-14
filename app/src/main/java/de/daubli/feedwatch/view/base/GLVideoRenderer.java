@@ -44,6 +44,8 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     private boolean frameAvailable;
 
+    private Runnable pendingConsumedCallback;
+
     // ------------------------------------------------------------
     // Surface state
     // ------------------------------------------------------------
@@ -115,11 +117,21 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     /** Thread-safe frame submission */
     public void render(ByteBuffer buffer, int width, int height, FourCCType type) {
+        render(buffer, width, height, type, null);
+    }
+
+    /** onConsumed runs once the buffer was uploaded or replaced and may be reused */
+    public void render(ByteBuffer buffer, int width, int height, FourCCType type, Runnable onConsumed) {
         synchronized (lock) {
+            if (pendingConsumedCallback != null) {
+                // previous frame was never uploaded
+                pendingConsumedCallback.run();
+            }
             pendingFrame = buffer;
             frameWidth = width;
             frameHeight = height;
             frameType = type;
+            pendingConsumedCallback = onConsumed;
             frameAvailable = true;
 
             if (surfaceWidth > 0 && surfaceHeight > 0) {
@@ -193,6 +205,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         final ByteBuffer frame;
         final int w, h;
         final FourCCType type;
+        final Runnable consumedCallback;
 
         synchronized (lock) {
             if (!frameAvailable) {
@@ -202,10 +215,15 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
             w = frameWidth;
             h = frameHeight;
             type = frameType;
+            consumedCallback = pendingConsumedCallback;
+            pendingConsumedCallback = null;
             frameAvailable = false;
         }
 
         uploadFrame(frame, type, w, h);
+        if (consumedCallback != null) {
+            consumedCallback.run();
+        }
         draw(type, w);
     }
 

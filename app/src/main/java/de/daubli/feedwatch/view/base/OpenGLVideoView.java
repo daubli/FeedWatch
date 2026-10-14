@@ -51,11 +51,19 @@ public class OpenGLVideoView extends GLSurfaceView {
 
     public void updateFrame(final ByteBuffer buffer, final int frameWidth, final int frameHeight,
             final FourCCType fourCCType) {
+        updateFrame(buffer, frameWidth, frameHeight, fourCCType, null);
+    }
+
+    public void updateFrame(final ByteBuffer buffer, final int frameWidth, final int frameHeight,
+            final FourCCType fourCCType, final Runnable onConsumed) {
         if (videoRenderer == null || buffer == null) {
+            if (onConsumed != null) {
+                onConsumed.run();
+            }
             return;
         }
 
-        queueEvent(() -> videoRenderer.render(buffer, frameWidth, frameHeight, fourCCType));
+        queueEvent(() -> videoRenderer.render(buffer, frameWidth, frameHeight, fourCCType, onConsumed));
         requestRender();
     }
 
