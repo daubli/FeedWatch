@@ -9,9 +9,15 @@ NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vi
 
 ### Video Sources
 
+![Source list](img/sources.jpeg)
+
+All sources the app finds are listed on the start screen: NDI® sources from the network and UVC devices connected
+via USB. The list updates itself in the background, pull down to refresh it right away. Tap a source to open it.
+
 - **NDI® High Bandwidth Monitoring**
     - Supports NDI® High Bandwidth sources
     - Since NDI® can be network-intensive, using a **USB-C Ethernet adapter** is strongly recommended.
+    - NDI® senders outside mDNS discovery can be added by their IP address in the Settings.
     - **NDI® HX** is currently not supported. I invested some effort and implemented
   a working prototype. However, in order to receive NDI® HX streams for
   longer than 5 minutes, you need currently a NDI® Advanced SDK license.
@@ -25,14 +31,47 @@ NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vi
   This functionality was developed and tested with a low-cost **UGREEN Video Capture Card** (Amazon), which performed
   reliably.  
   Any supported UVC device will automatically appear as an available source.
- 
+
+### Default Source
+
+Long-press a source and choose **Set as default source** to open it automatically. There can only be one default
+source, it is marked with a **DEFAULT** badge.
+
+![Setting the default source](img/source-menu.jpeg)
+
+Once per app start, the default source opens as soon as it is available. A short countdown is shown before, tap
+**Cancel** to stay on the source list. Closing the stream returns to the list without opening the source again.
+
+![Default source countdown](img/default-source.jpeg)
+
+The default source can also be removed in the Settings, even while it is not available.
+
+### Stream View
+
+![Stream view](img/stream.jpeg)
+
+Tap the picture to show or hide the controls. The top bar shows the source, its tally state, resolution, frame rate
+and pixel format. The bottom bar switches the monitoring tools and audio.
+
+### Audio
+
+NDI® audio is played back together with the picture, with a level meter for the left and right channel. Use the
+**AUDIO** button to mute it. Without audio, the picture is shown with the lowest latency instead of waiting for its
+audio.
 
 ### Low Bandwidth Mode
 
 Low Bandwidth Mode reduces network and CPU usage by using the NDI proxy stream instead of the full-resolution video feed. This mode is ideal when your android device is only connected to a wireless network. 
 While image quality is reduced compared to the full NDI stream it can nevertheless be enough to check feed existence, framing or exposure. 
 
-You can enable Low Bandwidth Mode in the app’s Settings page (Three-Dot Menu -> Settings)
+You can enable Low Bandwidth Mode in the app’s Settings (gear icon on the source list).
+
+### Viewer Mode
+
+Viewer Mode shows only the picture: monitoring tools, overlays and stream info are hidden, only the close and audio
+buttons remain. It can be enabled in the Settings.
+
+![Settings](img/settings.jpeg)
 
 ---
 
