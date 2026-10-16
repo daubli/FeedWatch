@@ -86,6 +86,15 @@ public class OpenGLVideoView extends GLSurfaceView {
         requestRender();
     }
 
+    public void setFocusPeakingColor(int color) {
+        if (focusAssistOverlay == null) {
+            return;
+        }
+
+        queueEvent(() -> focusAssistOverlay.setEdgeColor(color));
+        requestRender();
+    }
+
     public void setZebraOverlayEnabled(boolean enabled) {
         if (zebraOverlay == null) {
             return;

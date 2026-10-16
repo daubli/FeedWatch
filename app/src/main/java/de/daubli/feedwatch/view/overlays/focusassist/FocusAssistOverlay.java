@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 
+import android.graphics.Color;
 import android.opengl.GLES20;
 import de.daubli.feedwatch.view.overlays.Overlay;
 
@@ -36,6 +37,8 @@ public class FocusAssistOverlay extends Overlay {
     // configurable
     private float threshold = 0.3f;
 
+    private final float[] edgeColor = {1.0f, 0.0f, 0.0f};
+
     public FocusAssistOverlay() {
         vertexBuffer = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
         texCoordBuffer = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
@@ -47,6 +50,15 @@ public class FocusAssistOverlay extends Overlay {
             GLES20.glUseProgram(program);
             GLES20.glUniform1f(uThreshold, this.threshold);
         }
+    }
+
+    /**
+     * Sets the color edges are drawn in. Call it on the GL thread.
+     */
+    public void setEdgeColor(int color) {
+        edgeColor[0] = Color.red(color) / 255f;
+        edgeColor[1] = Color.green(color) / 255f;
+        edgeColor[2] = Color.blue(color) / 255f;
     }
 
     private void initGL() {
@@ -143,7 +155,6 @@ public class FocusAssistOverlay extends Overlay {
 
         GLES20.glUseProgram(program);
         GLES20.glUniform1f(uThreshold, threshold);
-        GLES20.glUniform3f(uEdgeColor, 1.0f, 0.0f, 0.0f);
 
         initialized = true;
     }
@@ -158,6 +169,7 @@ public class FocusAssistOverlay extends Overlay {
         // We sample the surface-sized FBO texture
         GLES20.glUniform2f(uTexelSize, 1.0f / (float) surfaceWidth, 1.0f / (float) surfaceHeight);
         GLES20.glUniform1f(uThreshold, threshold);
+        GLES20.glUniform3f(uEdgeColor, edgeColor[0], edgeColor[1], edgeColor[2]);
 
         // Compute NDC quad for the video rect (no heap alloc)
         float left = 2f * videoRectLeft / surfaceWidth - 1f;

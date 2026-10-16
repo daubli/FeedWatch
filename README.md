@@ -88,6 +88,7 @@ buttons remain. It can be enabled in the Settings.
 
 - Simple focus peaking implementation
 - Fixed sharpness sensitivity: **70%**
+- Edge color **red**, **yellow** or **blue**: long-press the **PEAK** button to choose it
 
 ![Focus Peaking Example](img/focus-assist.jpeg)
 

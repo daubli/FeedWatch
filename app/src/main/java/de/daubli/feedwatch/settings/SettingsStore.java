@@ -9,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
 import androidx.annotation.Nullable;
 
 public class SettingsStore {
@@ -20,6 +21,8 @@ public class SettingsStore {
     private static final String FRAMING_HELPER_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.enabled";
 
     private static final String FOCUS_ASSIST_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.focusassist.enabled";
+
+    private static final String FOCUS_PEAKING_COLOR_KEY = "de.daubli.feedwatch.view.overlays.focusassist.color";
 
     private static final String ZEBRA_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.zebra.enabled";
 
@@ -107,6 +110,27 @@ public class SettingsStore {
     public void setFocusAssistEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(FOCUS_ASSIST_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * Color of the focus peaking edges, red by default.
+     */
+    public FocusPeakingColor getFocusPeakingColor() {
+        String name = sharedPreferences.getString(FOCUS_PEAKING_COLOR_KEY, null);
+        if (name != null) {
+            try {
+                return FocusPeakingColor.valueOf(name);
+            } catch (IllegalArgumentException e) {
+                // a color from a newer version, fall back to the default
+            }
+        }
+        return FocusPeakingColor.RED;
+    }
+
+    public void setFocusPeakingColor(FocusPeakingColor color) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(FOCUS_PEAKING_COLOR_KEY, color.name());
         editor.apply();
     }
 

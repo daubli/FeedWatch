@@ -56,5 +56,10 @@
     <string name="tool_tally">TALLY</string>
     <string name="tool_audio">AUDIO</string>
     <string name="audio_left">L</string>
+    <string name="peaking_settings_title">Focus peaking</string>
+    <string name="peaking_settings_color">Color</string>
+    <string name="color_red">Red</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_blue">Blue</string>
     <string name="audio_right">R</string>
 </resources>

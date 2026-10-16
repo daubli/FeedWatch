@@ -10,8 +10,11 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.*;
 import android.widget.TextView;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
 import de.daubli.feedwatch.ndi.NdiDiscoveryManager;
@@ -21,6 +24,8 @@ import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.sources.VideoSource;
 import de.daubli.feedwatch.uvc.StreamUvcVideoRunner;
 import de.daubli.feedwatch.uvc.UVCSource;
+import de.daubli.feedwatch.view.hud.ToolSettingsPopup;
+import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
 
 public class StreamVideoActivity extends AppCompatActivity {
 
@@ -44,6 +49,9 @@ public class StreamVideoActivity extends AppCompatActivity {
     private Runnable hideMenuCallback;
 
     private boolean hudShown;
+
+    @Nullable
+    private ToolSettingsPopup toolSettingsPopup;
 
     private int lastVideoWidth;
 
@@ -117,6 +125,7 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void initSavedState() {
         SettingsStore settingsStore = new SettingsStore();
+        viewBinding.openGLVideoView.setFocusPeakingColor(settingsStore.getFocusPeakingColor().getColor());
         if (settingsStore.isFramingHelperOverlayEnabled()) {
             viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
             viewBinding.gridButton.setActivated(true);
@@ -188,6 +197,10 @@ public class StreamVideoActivity extends AppCompatActivity {
 
         // on the root rather than the video view, which stays invisible until the first frame arrives
         viewBinding.getRoot().setOnClickListener(v -> {
+            // a tap next to an open tool settings popup only closes it
+            if (dismissToolSettings()) {
+                return;
+            }
             if (hudShown) {
                 hideMenuNow();
             } else {
@@ -215,17 +228,65 @@ public class StreamVideoActivity extends AppCompatActivity {
     private void initializeToggleFocusAssistButton() {
         viewBinding.focusAssistButton.setOnClickListener(view -> {
             extendMenuTimeout();
-            SettingsStore settingsStore = new SettingsStore();
-            if (settingsStore.isFocusAssistEnabled()) {
-                viewBinding.openGLVideoView.setFocusAssistEnabled(false);
-                viewBinding.focusAssistButton.setActivated(false);
-                settingsStore.setFocusAssistEnabled(false);
-            } else {
-                viewBinding.openGLVideoView.setFocusAssistEnabled(true);
-                viewBinding.focusAssistButton.setActivated(true);
-                settingsStore.setFocusAssistEnabled(true);
-            }
+            setFocusAssistEnabled(!new SettingsStore().isFocusAssistEnabled());
         });
+        viewBinding.focusAssistButton.setOnLongClickListener(view -> {
+            showFocusPeakingSettings();
+            return true;
+        });
+    }
+
+    private void setFocusAssistEnabled(boolean enabled) {
+        viewBinding.openGLVideoView.setFocusAssistEnabled(enabled);
+        viewBinding.focusAssistButton.setActivated(enabled);
+        new SettingsStore().setFocusAssistEnabled(enabled);
+    }
+
+    private void showFocusPeakingSettings() {
+        SettingsStore settingsStore = new SettingsStore();
+        FocusPeakingColor[] colors = FocusPeakingColor.values();
+
+        List<ToolSettingsPopup.Choice> choices = new ArrayList<>();
+        for (FocusPeakingColor color : colors) {
+            choices.add(new ToolSettingsPopup.Choice(getString(color.getLabel()), color.getColor()));
+        }
+
+        ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.peaking_settings_title))
+                .addChoices(getString(R.string.peaking_settings_color), choices,
+                        settingsStore.getFocusPeakingColor().ordinal(), index -> {
+                            settingsStore.setFocusPeakingColor(colors[index]);
+                            viewBinding.openGLVideoView.setFocusPeakingColor(colors[index].getColor());
+                            // the new color is only visible with peaking on
+                            if (!settingsStore.isFocusAssistEnabled()) {
+                                setFocusAssistEnabled(true);
+                            }
+                        });
+        showToolSettings(popup, viewBinding.focusAssistButton);
+    }
+
+    /**
+     * Opens a tool's settings above its button. The HUD stays open while they are shown.
+     */
+    private void showToolSettings(ToolSettingsPopup popup, View toolButton) {
+        dismissToolSettings();
+        menuHandler.removeCallbacks(hideMenuCallback);
+
+        popup.setOnDismissListener(this::extendMenuTimeout);
+        toolSettingsPopup = popup;
+        popup.showAbove(toolButton);
+    }
+
+    /**
+     * @return whether tool settings were open
+     */
+    private boolean dismissToolSettings() {
+        ToolSettingsPopup popup = toolSettingsPopup;
+        toolSettingsPopup = null;
+        if (popup != null && popup.isShowing()) {
+            popup.dismiss();
+            return true;
+        }
+        return false;
     }
 
     private void initializeToggleGridButton() {
@@ -450,6 +511,7 @@ public class StreamVideoActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        dismissToolSettings();
 
         if (runner != null) {
             runner.shutdown();
