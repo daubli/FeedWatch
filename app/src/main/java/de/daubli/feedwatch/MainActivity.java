@@ -9,7 +9,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.android.material.snackbar.Snackbar;
 
+import android.animation.ValueAnimator;
 import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
@@ -21,13 +30,16 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
 import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 import androidx.annotation.MainThread;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 import com.google.android.material.appbar.MaterialToolbar;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -49,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private static final long SCAN_PERIOD_MS = 2000;
 
     // time to cancel opening the default source before it starts
-    private static final long AUTO_START_DELAY_MS = 1500;
+    private static final long AUTO_START_DELAY_MS = 3000;
 
     private NdiFinder finder;
 
@@ -89,6 +101,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Nullable
     private Snackbar autoStartSnackbar;
+
+    @Nullable
+    private ValueAnimator autoStartProgress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -335,8 +350,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         pendingAutoStart = () -> {
-            pendingAutoStart = null;
-            autoStartSnackbar = null;
+            // the snackbar is indefinite, it has to be dismissed here
+            cancelPendingAutoStart();
             // it may have disappeared during the delay, then the next scan that finds it tries again
             VideoSource stillAvailable = findDefaultSource();
             if (stillAvailable != null) {
@@ -350,9 +365,94 @@ public class MainActivity extends AppCompatActivity {
                 .setAction(R.string.default_source_cancel, v -> {
                     cancelPendingAutoStart();
                     autoStartConsumed = true;
-                });
+                })
+                .setTextColor(ContextCompat.getColor(this, R.color.fw_text_primary))
+                .setActionTextColor(ContextCompat.getColor(this, R.color.fw_accent));
+        View snackbarView = autoStartSnackbar.getView();
+        ProgressBackground progress = new ProgressBackground(
+                ContextCompat.getColor(this, R.color.fw_surface_raised),
+                ContextCompat.getColor(this, R.color.fw_accent_dim),
+                4 * getResources().getDisplayMetrics().density);
+        snackbarView.setBackground(progress);
+        // the theme tints the snackbar background, which would hide the progress
+        snackbarView.setBackgroundTintList(null);
         autoStartSnackbar.show();
+
+        // fills up until the source opens
+        autoStartProgress = ValueAnimator.ofFloat(0f, 1f).setDuration(AUTO_START_DELAY_MS);
+        autoStartProgress.setInterpolator(new LinearInterpolator());
+        autoStartProgress.addUpdateListener(animation -> progress.setProgress((float) animation.getAnimatedValue()));
+        autoStartProgress.start();
         mainHandler.postDelayed(pendingAutoStart, AUTO_START_DELAY_MS);
+    }
+
+    /**
+     * Snackbar background that works as a progress bar: a rounded track, filled from the left up to the progress.
+     */
+    private static class ProgressBackground extends Drawable {
+
+        private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        private final int trackColor;
+
+        private final int fillColor;
+
+        private final float cornerRadius;
+
+        private final RectF shape = new RectF();
+
+        private int alpha = 255;
+
+        private float progress;
+
+        ProgressBackground(int trackColor, int fillColor, float cornerRadius) {
+            this.trackColor = trackColor;
+            this.fillColor = fillColor;
+            this.cornerRadius = cornerRadius;
+        }
+
+        void setProgress(float progress) {
+            this.progress = progress;
+            invalidateSelf();
+        }
+
+        @Override
+        public void draw(@NonNull Canvas canvas) {
+            Rect bounds = getBounds();
+            shape.set(bounds);
+            trackPaint.setColor(withAlpha(trackColor));
+            fillPaint.setColor(withAlpha(fillColor));
+            canvas.drawRoundRect(shape, cornerRadius, cornerRadius, trackPaint);
+
+            canvas.save();
+            canvas.clipRect(bounds.left, bounds.top, bounds.left + bounds.width() * progress, bounds.bottom);
+            canvas.drawRoundRect(shape, cornerRadius, cornerRadius, fillPaint);
+            canvas.restore();
+        }
+
+        // the drawable alpha scales the colors' own alpha, the fill is translucent by itself
+        private int withAlpha(int color) {
+            return (color & 0x00FFFFFF) | (Color.alpha(color) * alpha / 255) << 24;
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+            this.alpha = alpha;
+            invalidateSelf();
+        }
+
+        @Override
+        public void setColorFilter(@Nullable ColorFilter colorFilter) {
+            trackPaint.setColorFilter(colorFilter);
+            fillPaint.setColorFilter(colorFilter);
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
     }
 
     private void cancelPendingAutoStart() {
@@ -363,6 +463,10 @@ public class MainActivity extends AppCompatActivity {
         if (autoStartSnackbar != null) {
             autoStartSnackbar.dismiss();
             autoStartSnackbar = null;
+        }
+        if (autoStartProgress != null) {
+            autoStartProgress.cancel();
+            autoStartProgress = null;
         }
     }
 
