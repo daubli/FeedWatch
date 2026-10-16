@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              xmlns:tools="http://schemas.android.com/tools"
+              android:layout_width="280dp"
+              android:layout_height="wrap_content"
+              android:layout_marginTop="12dp"
+              android:orientation="vertical">
+
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+        <TextView
+                android:id="@+id/toolSettingsSliderLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAllCaps="true"
+                android:textAppearance="@style/TextAppearance.FeedWatch.SectionLabel"
+                tools:text="Threshold"/>
+
+        <TextView
+                android:id="@+id/toolSettingsSliderValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/public_sans_semibold"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/fw_accent"
+                android:textSize="16sp"
+                tools:text="95%"/>
+    </LinearLayout>
+
+    <com.google.android.material.slider.Slider
+            android:id="@+id/toolSettingsSlider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:haloColor="@color/fw_accent_dim"
+            app:labelBehavior="gone"
+            app:thumbColor="@color/fw_accent"
+            app:tickColor="@android:color/transparent"
+            app:trackColorActive="@color/fw_accent"
+            app:trackColorInactive="@color/fw_outline_strong"/>
+
+    <!-- the ends of the range, below the ends of the track -->
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="-6dp"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+        <TextView
+                android:id="@+id/toolSettingsSliderMin"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/fw_text_disabled"
+                android:textSize="11sp"
+                tools:text="50%"/>
+
+        <TextView
+                android:id="@+id/toolSettingsSliderMax"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/fw_text_disabled"
+                android:textSize="11sp"
+                tools:text="100%"/>
+    </LinearLayout>
+</LinearLayout>

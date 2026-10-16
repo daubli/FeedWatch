@@ -9,7 +9,7 @@ import de.daubli.feedwatch.view.overlays.Overlay;
 
 public class ZebraOverlay extends Overlay {
 
-    private static final float DEFAULT_THRESHOLD_IRE = 95f;
+    public static final float DEFAULT_THRESHOLD_IRE = 95f;
 
     private static final float Y8_BLACK_LIMITED = 16f;
 
@@ -48,6 +48,8 @@ public class ZebraOverlay extends Overlay {
     // 8 bit range mode
     private boolean limitedRange = true;
 
+    private float thresholdIre = DEFAULT_THRESHOLD_IRE;
+
     // normalized 0..1 threshold actually used in shader
     private float thresholdYPrime = 0f;
 
@@ -68,8 +70,8 @@ public class ZebraOverlay extends Overlay {
     /** Set whether IRE mapping uses limited-range (16..235) or full-range (0..255). */
     public void setLimitedRange(boolean limitedRange) {
         this.limitedRange = limitedRange;
-        // Re-apply default threshold semantics to keep the zebra consistent
-        setThresholdIre(DEFAULT_THRESHOLD_IRE);
+        // Re-apply the threshold, its code value depends on the range
+        setThresholdIre(thresholdIre);
     }
 
     /**
@@ -84,6 +86,7 @@ public class ZebraOverlay extends Overlay {
      */
     public void setThresholdIre(float ire) {
         float clamped = Math.max(0f, Math.min(100f, ire));
+        this.thresholdIre = clamped;
         if (limitedRange) {
             float code = Y8_BLACK_LIMITED + (clamped / 100f) * Y8_RANGE_LIMITED; // 16..235
             this.thresholdYPrime = code / 255f;

@@ -58,6 +58,9 @@
     <string name="audio_left">L</string>
     <string name="peaking_settings_title">Focus peaking</string>
     <string name="peaking_settings_color">Color</string>
+    <string name="zebra_settings_title">Zebra</string>
+    <string name="zebra_settings_threshold">Threshold</string>
+    <string name="percent_value">%1$d%%</string>
     <string name="color_red">Red</string>
     <string name="color_yellow">Yellow</string>
     <string name="color_blue">Blue</string>

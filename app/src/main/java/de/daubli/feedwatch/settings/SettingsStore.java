@@ -10,6 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import android.content.Context;
 import android.content.SharedPreferences;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
+import de.daubli.feedwatch.view.overlays.zebra.ZebraOverlay;
 import androidx.annotation.Nullable;
 
 public class SettingsStore {
@@ -25,6 +26,8 @@ public class SettingsStore {
     private static final String FOCUS_PEAKING_COLOR_KEY = "de.daubli.feedwatch.view.overlays.focusassist.color";
 
     private static final String ZEBRA_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.zebra.enabled";
+
+    private static final String ZEBRA_THRESHOLD_KEY = "de.daubli.feedwatch.view.overlays.zebra.threshold";
 
     private static final String TALLY_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.tally.enabled";
 
@@ -144,6 +147,19 @@ public class SettingsStore {
     public void setZebraEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(ZEBRA_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * Brightness from which zebra stripes are shown, in percent (IRE).
+     */
+    public int getZebraThreshold() {
+        return sharedPreferences.getInt(ZEBRA_THRESHOLD_KEY, Math.round(ZebraOverlay.DEFAULT_THRESHOLD_IRE));
+    }
+
+    public void setZebraThreshold(int percent) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(ZEBRA_THRESHOLD_KEY, percent);
         editor.apply();
     }
 

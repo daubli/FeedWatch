@@ -14,11 +14,13 @@ import android.widget.PopupWindow;
 import android.widget.TextView;
 import androidx.annotation.ColorInt;
 import androidx.annotation.Nullable;
+import com.google.android.material.slider.Slider;
 import de.daubli.feedwatch.R;
 
 /**
  * Small popup with the settings of a monitoring tool, opened above its button in the stream HUD. Each section lets
- * the user pick one of a few choices, a pick applies right away and the popup stays open.
+ * the user pick one of a few choices or set a value on a slider, a change applies right away and the popup stays
+ * open.
  * <p>
  * The popup does not take focus, so the stream stays in immersive fullscreen. Touches outside of it reach the
  * screen below, which should close it with {@link #dismiss()}.
@@ -49,6 +51,16 @@ public class ToolSettingsPopup {
     public interface OnChoiceSelectedListener {
 
         void onChoiceSelected(int index);
+    }
+
+    public interface ValueFormatter {
+
+        CharSequence format(int value);
+    }
+
+    public interface OnValueChangedListener {
+
+        void onValueChanged(int value);
     }
 
     private final LayoutInflater inflater;
@@ -108,6 +120,38 @@ public class ToolSettingsPopup {
         if (last != null) {
             ((LinearLayout.LayoutParams) last.getLayoutParams()).setMarginEnd(0);
         }
+
+        sections.addView(section);
+        return this;
+    }
+
+    /**
+     * Adds a section with a slider for whole numbers from {@code from} to {@code to}. The current value is shown next
+     * to the label, the ends of the range below the slider. The listener is called while the slider is dragged.
+     */
+    public ToolSettingsPopup addSlider(CharSequence label, int from, int to, int value, ValueFormatter formatter,
+            OnValueChangedListener listener) {
+        View section = inflater.inflate(R.layout.item_tool_settings_slider, sections, false);
+        ((TextView) section.findViewById(R.id.toolSettingsSliderLabel)).setText(label);
+        ((TextView) section.findViewById(R.id.toolSettingsSliderMin)).setText(formatter.format(from));
+        ((TextView) section.findViewById(R.id.toolSettingsSliderMax)).setText(formatter.format(to));
+        TextView valueView = section.findViewById(R.id.toolSettingsSliderValue);
+
+        int clamped = Math.max(from, Math.min(to, value));
+        valueView.setText(formatter.format(clamped));
+
+        Slider slider = section.findViewById(R.id.toolSettingsSlider);
+        slider.setValueFrom(from);
+        slider.setValueTo(to);
+        slider.setStepSize(1);
+        slider.setValue(clamped);
+        slider.addOnChangeListener((s, newValue, fromUser) -> {
+            int rounded = Math.round(newValue);
+            valueView.setText(formatter.format(rounded));
+            if (fromUser) {
+                listener.onValueChanged(rounded);
+            }
+        });
 
         sections.addView(section);
         return this;

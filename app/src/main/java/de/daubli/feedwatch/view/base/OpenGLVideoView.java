@@ -95,6 +95,15 @@ public class OpenGLVideoView extends GLSurfaceView {
         requestRender();
     }
 
+    public void setZebraThreshold(int percent) {
+        if (zebraOverlay == null) {
+            return;
+        }
+
+        queueEvent(() -> zebraOverlay.setThresholdIre(percent));
+        requestRender();
+    }
+
     public void setZebraOverlayEnabled(boolean enabled) {
         if (zebraOverlay == null) {
             return;

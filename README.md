@@ -97,7 +97,7 @@ buttons remain. It can be enabled in the Settings.
 ### Zebra
 
 - Exposure warning using zebra stripes
-- Fixed threshold: **95 IRE**
+- Threshold from **50 to 100 IRE**, **95 IRE** by default: long-press the **ZEBRA** button to set it
 
 ![Zebra Example](img/zebra.jpeg)
 

@@ -33,6 +33,11 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private static final long MENU_HIDE_DELAY_MS = 5000;
 
+    // zebra thresholds below this mark mid-tones, not highlights
+    private static final int ZEBRA_THRESHOLD_MIN = 50;
+
+    private static final int ZEBRA_THRESHOLD_MAX = 100;
+
     private StreamVideoActivityBinding viewBinding;
 
     private VideoSource videoSource;
@@ -126,6 +131,7 @@ public class StreamVideoActivity extends AppCompatActivity {
     private void initSavedState() {
         SettingsStore settingsStore = new SettingsStore();
         viewBinding.openGLVideoView.setFocusPeakingColor(settingsStore.getFocusPeakingColor().getColor());
+        viewBinding.openGLVideoView.setZebraThreshold(settingsStore.getZebraThreshold());
         if (settingsStore.isFramingHelperOverlayEnabled()) {
             viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
             viewBinding.gridButton.setActivated(true);
@@ -212,17 +218,35 @@ public class StreamVideoActivity extends AppCompatActivity {
     private void initializeZebraButton() {
         viewBinding.zebraButton.setOnClickListener(view -> {
             extendMenuTimeout();
-            SettingsStore settingsStore = new SettingsStore();
-            if (settingsStore.isZebraEnabled()) {
-                viewBinding.openGLVideoView.setZebraOverlayEnabled(false);
-                viewBinding.zebraButton.setActivated(false);
-                settingsStore.setZebraEnabled(false);
-            } else {
-                viewBinding.openGLVideoView.setZebraOverlayEnabled(true);
-                viewBinding.zebraButton.setActivated(true);
-                settingsStore.setZebraEnabled(true);
-            }
+            setZebraEnabled(!new SettingsStore().isZebraEnabled());
         });
+        viewBinding.zebraButton.setOnLongClickListener(view -> {
+            showZebraSettings();
+            return true;
+        });
+    }
+
+    private void setZebraEnabled(boolean enabled) {
+        viewBinding.openGLVideoView.setZebraOverlayEnabled(enabled);
+        viewBinding.zebraButton.setActivated(enabled);
+        new SettingsStore().setZebraEnabled(enabled);
+    }
+
+    private void showZebraSettings() {
+        SettingsStore settingsStore = new SettingsStore();
+
+        ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.zebra_settings_title))
+                .addSlider(getString(R.string.zebra_settings_threshold), ZEBRA_THRESHOLD_MIN, ZEBRA_THRESHOLD_MAX,
+                        settingsStore.getZebraThreshold(), value -> getString(R.string.percent_value, value),
+                        value -> {
+                            settingsStore.setZebraThreshold(value);
+                            viewBinding.openGLVideoView.setZebraThreshold(value);
+                            // the stripes show where the threshold lies, so they are needed while setting it
+                            if (!settingsStore.isZebraEnabled()) {
+                                setZebraEnabled(true);
+                            }
+                        });
+        showToolSettings(popup, viewBinding.zebraButton);
     }
 
     private void initializeToggleFocusAssistButton() {
