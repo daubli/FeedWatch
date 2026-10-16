@@ -61,31 +61,6 @@ Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveDestroy(JNIEnv* env, jclass /*cl
     NDIlib_recv_destroy(recv);
 }
 
-/**
- * Waits up to timeoutMs for the next audio frame. Returns true if one was captured; it must then be freed with
- * receiveFreeAudio.
- */
-JNIEXPORT jboolean JNICALL
-Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCaptureAudio(
-    JNIEnv* env, jclass /*clazz*/, jlong pReceiver, jlong pFrame, jint timeoutMs)
-{
-    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
-    auto frame = reinterpret_cast<NDIlib_audio_frame_v2_t *>(pFrame);
-    if (!recv || !frame) return JNI_FALSE;
-
-    auto type = NDIlib_recv_capture_v2(recv, nullptr, frame, nullptr, timeoutMs);
-    return type == NDIlib_frame_type_audio ? JNI_TRUE : JNI_FALSE;
-}
-
-JNIEXPORT void JNICALL
-Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveFreeAudio(JNIEnv* env, jclass /*clazz*/, jlong pReceiver, jlong pFrame)
-{
-    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
-    auto frame = reinterpret_cast<NDIlib_audio_frame_v2_t *>(pFrame);
-    if (!recv || !frame) return;
-    NDIlib_recv_free_audio_v2(recv, frame);
-}
-
 static bool attr_is_true(const char* xml, const char* attr) {
     if (!xml || !attr) return false;
 

@@ -4,6 +4,4 @@ package de.daubli.feedwatch.ndi;
 
 abstract class NdiFrameCleaner {
     abstract void freeVideo(NdiVideoFrame videoFrame);
-
-    abstract void freeAudio(NdiAudioFrame ndiAudioFrame);
 }

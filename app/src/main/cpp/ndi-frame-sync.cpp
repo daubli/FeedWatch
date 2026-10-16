@@ -13,21 +13,6 @@ extern "C" {
         NDIlib_framesync_destroy(reinterpret_cast<NDIlib_framesync_instance_t>(pFramesync));
     }
 
-    JNIEXPORT void JNICALL
-    Java_de_daubli_feedwatch_ndi_NdiFrameSync_framesyncCaptureAudio
-            (JNIEnv *env, jclass jClazz, jlong pFramesync, jlong pFrame, jint jSampleRate, jint jNoChannels, jint jNoSamples) {
-        NDIlib_framesync_capture_audio(reinterpret_cast<NDIlib_framesync_instance_t>(pFramesync),
-                reinterpret_cast<NDIlib_audio_frame_v2_t *>(pFrame),
-                jSampleRate, jNoChannels, jNoSamples);
-    }
-
-    JNIEXPORT void JNICALL
-    Java_de_daubli_feedwatch_ndi_NdiFrameSync_framesyncFreeAudio
-            (JNIEnv *env, jclass jClazz, jlong pFramesync, jlong pFrame) {
-        NDIlib_framesync_free_audio(reinterpret_cast<NDIlib_framesync_instance_t>(pFramesync),
-                reinterpret_cast<NDIlib_audio_frame_v2_t *>(pFrame));
-    }
-
     JNIEXPORT jboolean JNICALL
     Java_de_daubli_feedwatch_ndi_NdiFrameSync_framesyncCaptureVideo
             (JNIEnv *env, jclass jClazz, jlong pFramesync, jlong pFrame, jint jFrameFormatType) {

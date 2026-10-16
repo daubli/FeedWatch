@@ -1,13 +1,11 @@
 package de.daubli.feedwatch.ndi;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
-import android.media.*;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -26,28 +24,16 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private static final String TAG = "StreamNDI";
 
-    private static final int VIDEO_FRAME_POOL_SIZE = 4;
+    // Frames wait in pendingFrames until their audio is heard: enough for ~250 ms of delay at 50 fps, plus the
+    // frames in flight to GL. They are only wrappers, the buffers belong to the frame sync.
+    private static final int VIDEO_FRAME_POOL_SIZE = 16;
 
-    private static final int AUDIO_BYTES_PER_FRAME = 4; // 16-bit stereo
+    // From the Choreographer frame time to the frame being on screen: GL draws it in this frame and SurfaceFlinger
+    // shows it with the next composition. Measured with a flash/beep source on an SM-M315F.
+    private static final int VIDEO_OUTPUT_LATENCY_FRAMES = 2;
 
-    private static final int AUDIO_CAPTURE_TIMEOUT_MS = 100;
-
-    // AudioTrack buffer: absorbs network jitter, so it is generous
-    private static final int AUDIO_TRACK_BUFFER_MS = 500;
-
-    // buffered before playback starts, enough to ride out gaps between NDI audio packets on Wi-Fi (seen up to
-    // ~185 ms); together with the output pipeline this is the audio latency
-    private static final int AUDIO_PREFILL_MS = 200;
-
-    // playback time after which the buffer level is taken as the level to hold
-    private static final int AUDIO_SETTLE_MS = 3000;
-
-    // time constant of the buffer level average; arrival and playback both come in bursts
-    private static final double AUDIO_FILL_AVERAGE_SECONDS = 1.0;
-
-    // Sender and DAC clocks differ by some ppm. The playback rate is trimmed by at most this much to hold the buffer
-    // level; 0.1 % is far below an audible pitch change.
-    private static final double AUDIO_MAX_RATE_CORRECTION = 0.001;
+    // smoothing of the measured audio latency, in display frames
+    private static final int AUDIO_LATENCY_AVERAGE_FRAMES = 32;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -65,11 +51,15 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private NdiFrameSync frameSync;
 
-    // separate audio-only connection, see startAudioThread()
-    private NdiReceiver audioReceiver;
+    // only touched on the main thread
+    private NdiAudioPlayer audioPlayer;
 
-    // created by the audio thread, released after it has exited
-    private volatile AudioTrack audioTrack;
+    private boolean audioEnabled;
+
+    // time from pulling audio out of the frame sync to hearing it, -1 while unknown
+    private long audioLatencyNanos = -1;
+
+    private final float[] audioPeaks = new float[2];
 
     private Choreographer choreographer;
 
@@ -77,13 +67,12 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private boolean firstFramePending = true;
 
-    private Thread audioThread;
-
     private Thread videoCaptureThread;
 
     private Thread tallyCaptureThread;
 
-    private final AtomicReference<NdiVideoFrame> renderFrame = new AtomicReference<>();
+    // captured frames in order, waiting until their audio is due
+    private final ConcurrentLinkedQueue<PendingFrame> pendingFrames = new ConcurrentLinkedQueue<>();
 
     // Frames are only reused once the GL thread has uploaded them
     private final ArrayBlockingQueue<NdiVideoFrame> freeFrames = new ArrayBlockingQueue<>(VIDEO_FRAME_POOL_SIZE);
@@ -95,11 +84,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     private final Semaphore captureRequest = new Semaphore(0);
 
     private NdiVideoFrame captureFrame;
-
-    // Peak levels since the last display frame, for the HUD audio meters
-    private volatile float audioPeakLeft;
-
-    private volatile float audioPeakRight;
 
     // Ensure we fail only once and don't spam UI/logs
     private final AtomicBoolean renderFailed = new AtomicBoolean(false);
@@ -126,14 +110,15 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             }
             captureFrame = freeFrames.poll();
 
-            audioReceiver = NdiReceiver.audioOnly();
-            audioReceiver.connect(ndiSource);
-
-            startAudioThread();
             startVideoCaptureThread();
             startTallyCaptureThread();
 
             mainHandler.post(() -> {
+                if (!running) {
+                    return;
+                }
+                audioPlayer = new NdiAudioPlayer(frameSync);
+                setAudioEnabled(true);
                 choreographer = Choreographer.getInstance();
                 choreographer.postFrameCallback(frameCallback);
             });
@@ -149,7 +134,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         running = false;
 
         // Interrupt threads so they can exit quickly (especially if sleeping)
-        interruptThread(audioThread);
         interruptThread(videoCaptureThread);
         interruptThread(tallyCaptureThread);
 
@@ -164,161 +148,36 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         new Thread(() -> {
             joinThread(tallyCaptureThread);
             joinThread(videoCaptureThread);
-            joinThread(audioThread);
 
             mainHandler.post(() -> {
-                safeReleaseAudioTrack();
-                // frames must be freed before the frame sync that owns their buffers
+                // the player and the frames use the frame sync, so they go first
+                safeCloseAudioPlayer();
                 safeReleaseVideoFrames();
                 safeCloseFrameSync();
                 safeCloseReceiver();
-                safeCloseAudioReceiver();
                 activity.finish();
             });
         }, "NDI-Shutdown").start();
     }
 
-    private static AudioTrack createAudioTrack(int sampleRate) {
-        int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_STEREO,
-                AudioFormat.ENCODING_PCM_16BIT);
-        int bufferSize = Math.max(minBufferSize, sampleRate * AUDIO_TRACK_BUFFER_MS / 1000 * AUDIO_BYTES_PER_FRAME);
-
-        return new AudioTrack.Builder().setAudioAttributes(
-                        new AudioAttributes.Builder().setLegacyStreamType(AudioManager.STREAM_MUSIC).build()).setAudioFormat(
-                        new AudioFormat.Builder().setSampleRate(sampleRate).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build()).setBufferSizeInBytes(bufferSize)
-                .setTransferMode(AudioTrack.MODE_STREAM).build();
-    }
-
     /**
-     * Plays audio from the audio-only receiver. Audio is not taken from the frame sync: its resampler follows both
-     * the timing of the calls and the burstiness of network arrival, which is audible as wavering pitch. Instead
-     * frames are queued on the AudioTrack as they arrive, so network jitter only changes how full its buffer is,
-     * and the playback rate is trimmed by at most 0.1 % to hold the buffer level against clock drift.
+     * Switches audio playback on or off. With audio on, video is held back until the matching audio is heard;
+     * with audio off, every frame is shown as soon as possible. Must be called on the main thread.
      */
-    private void startAudioThread() {
-        audioThread = new Thread(() -> {
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
-            NdiAudioFrame audioFrame = new NdiAudioFrame();
-            float[] peaks = new float[2];
-            ByteBuffer pcm = null;
-
-            AudioTrack track = null;
-            int trackSampleRate = 0;
-            int playbackRate = 0;
-            long framesWritten = 0;
-            double fillAverage = 0;
-            double targetFill = -1;
-            long lastFillUpdate = 0;
-            boolean playing = false;
-
-            try {
-                while (running && !Thread.currentThread().isInterrupted()) {
-                    NdiReceiver source = audioReceiver;
-                    if (source == null) {
-                        break;
-                    }
-                    if (!source.captureAudio(audioFrame, AUDIO_CAPTURE_TIMEOUT_MS)) {
-                        continue;
-                    }
-
-                    int sampleRate = audioFrame.getSampleRate();
-                    int samples = audioFrame.getSamples();
-                    int channels = audioFrame.getChannels();
-                    if (sampleRate <= 0 || samples <= 0 || channels <= 0) {
-                        audioFrame.freeBuffer();
-                        continue;
-                    }
-
-                    if (track == null || sampleRate != trackSampleRate) {
-                        // the AudioTrack runs at the sender's sample rate, Android resamples to the device
-                        if (track != null) {
-                            track.release();
-                        }
-                        track = createAudioTrack(sampleRate);
-                        audioTrack = track;
-                        trackSampleRate = sampleRate;
-                        playbackRate = sampleRate;
-                        framesWritten = 0;
-                        targetFill = -1;
-                        playing = false;
-                    }
-
-                    // converted natively: per-sample work in Java is far too slow here
-                    int bytes = samples * AUDIO_BYTES_PER_FRAME;
-                    if (pcm == null || pcm.capacity() < bytes) {
-                        pcm = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder());
-                    }
-                    int size = audioFrame.toStereoPcm16(pcm, peaks);
-                    audioFrame.freeBuffer();
-                    if (size <= 0) {
-                        continue;
-                    }
-                    pcm.clear();
-                    pcm.limit(size);
-
-                    audioPeakLeft = Math.max(audioPeakLeft, peaks[0]);
-                    audioPeakRight = Math.max(audioPeakRight, peaks[1]);
-
-                    long prefillFrames = (long) trackSampleRate * AUDIO_PREFILL_MS / 1000;
-                    if (playing) {
-                        // written minus played (an unsigned 32-bit frame counter); includes the output pipeline's
-                        // latency, so only the level it settles at is known, not what it should be
-                        int head = track.getPlaybackHeadPosition();
-                        long fill = (framesWritten - head) & 0xFFFFFFFFL;
-                        long now = System.nanoTime();
-                        double alpha = Math.min(1.0, (now - lastFillUpdate) / 1e9 / AUDIO_FILL_AVERAGE_SECONDS);
-                        lastFillUpdate = now;
-                        fillAverage += alpha * (fill - fillAverage);
-
-                        if (targetFill < 0 && (head & 0xFFFFFFFFL) >= (long) trackSampleRate * AUDIO_SETTLE_MS / 1000) {
-                            targetFill = fillAverage;
-                        }
-                        if (targetFill > 0) {
-                            double excess = fillAverage - targetFill;
-                            if (excess > prefillFrames) {
-                                // a burst left far more buffered than needed: drop a packet rather than keep the
-                                // extra latency
-                                Log.d(TAG, "Dropping audio packet, buffer " + Math.round(excess) + " frames over target");
-                                fillAverage -= samples;
-                                continue;
-                            }
-                            double correction = Math.max(-AUDIO_MAX_RATE_CORRECTION,
-                                    Math.min(AUDIO_MAX_RATE_CORRECTION, excess / prefillFrames * AUDIO_MAX_RATE_CORRECTION));
-                            int rate = (int) Math.round(trackSampleRate * (1.0 + correction));
-                            if (rate != playbackRate) {
-                                track.setPlaybackRate(rate);
-                                playbackRate = rate;
-                            }
-                        }
-                    }
-
-                    // a full buffer only happens after a long stall; the excess is dropped
-                    int written = track.write(pcm, size, AudioTrack.WRITE_NON_BLOCKING);
-                    if (written < 0) {
-                        Log.e(TAG, "AudioTrack write failed: " + written);
-                        failWithMessage("Audio playback failed.");
-                        return;
-                    }
-                    framesWritten += written / AUDIO_BYTES_PER_FRAME;
-
-                    if (!playing && framesWritten >= prefillFrames) {
-                        track.play();
-                        playing = true;
-                        fillAverage = framesWritten;
-                        lastFillUpdate = System.nanoTime();
-                    }
-                }
-            } catch (Throwable t) {
-                Log.e(TAG, "Audio playback failed", t);
-                failWithMessage("Audio playback failed.");
-            } finally {
-                audioFrame.freeBuffer();
-                audioFrame.close();
+    public void setAudioEnabled(boolean enabled) {
+        audioEnabled = enabled;
+        if (audioPlayer == null) {
+            // not started yet, run() applies the setting
+            return;
+        }
+        audioLatencyNanos = -1;
+        if (enabled) {
+            if (!audioPlayer.start()) {
+                Toast.makeText(activity, "Audio output not available.", Toast.LENGTH_LONG).show();
             }
-        }, "NDI-Audio");
-
-        audioThread.start();
+        } else {
+            audioPlayer.stop();
+        }
     }
 
     private void startVideoCaptureThread() {
@@ -342,11 +201,9 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                             }
                             lastTimestamp = timestamp;
 
-                            NdiVideoFrame skipped = renderFrame.getAndSet(captureFrame);
-                            if (skipped != null) {
-                                recycleFrame(skipped);
-                            }
-                            // blocks until the GL thread hands a frame back
+                            // the audio pulled from the frame sync now belongs to this frame
+                            pendingFrames.offer(new PendingFrame(captureFrame, System.nanoTime()));
+                            // blocks until a frame is handed back
                             captureFrame = freeFrames.take();
                         }
                     } catch (InterruptedException ie) {
@@ -373,11 +230,14 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 return;
             }
 
-            activity.onAudioLevels(audioPeakLeft, audioPeakRight);
-            audioPeakLeft = 0f;
-            audioPeakRight = 0f;
+            long delayNanos = 0;
+            if (audioEnabled) {
+                audioPlayer.takePeaks(audioPeaks);
+                activity.onAudioLevels(audioPeaks[0], audioPeaks[1]);
+                delayNanos = updateAudioLatency();
+            }
 
-            final NdiVideoFrame frame = renderFrame.getAndSet(null);
+            final NdiVideoFrame frame = takeDueFrame(frameTimeNanos, delayNanos);
             if (frame != null) {
                 if (firstFramePending) {
                     videoView.setVisibility(View.VISIBLE);
@@ -417,6 +277,27 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             reschedule();
         }
 
+        /**
+         * Returns the newest frame that should be on screen when this display frame is, recycling the older ones
+         * it replaces. A frame is due once its audio is heard, {@code delayNanos} after it was captured.
+         */
+        private NdiVideoFrame takeDueFrame(long frameTimeNanos, long delayNanos) {
+            long period = choreographerPeriodNanos();
+            // shown about VIDEO_OUTPUT_LATENCY_FRAMES after this frame time; round to the nearest display frame
+            long shownAt = frameTimeNanos + VIDEO_OUTPUT_LATENCY_FRAMES * period + period / 2;
+
+            NdiVideoFrame due = null;
+            PendingFrame pending;
+            while ((pending = pendingFrames.peek()) != null && pending.capturedAt + delayNanos <= shownAt) {
+                pendingFrames.poll();
+                if (due != null) {
+                    recycleFrame(due);
+                }
+                due = pending.frame;
+            }
+            return due;
+        }
+
         private void reschedule() {
             if (choreographer != null && running) {
                 // the frame captured now is shown on the next display frame
@@ -425,6 +306,37 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             }
         }
     };
+
+    /**
+     * @return how long video has to wait for its audio: the audio latency minus the video output latency, which
+     *         the frame time already accounts for
+     */
+    private long updateAudioLatency() {
+        long measured = audioPlayer.getOutputLatencyNanos();
+        if (measured > 0) {
+            audioLatencyNanos = audioLatencyNanos < 0 ? measured
+                    : audioLatencyNanos + (measured - audioLatencyNanos) / AUDIO_LATENCY_AVERAGE_FRAMES;
+        }
+        // until the output reports its latency, frames are shown right away
+        return Math.max(0, audioLatencyNanos);
+    }
+
+    private long choreographerPeriodNanos() {
+        float refreshRate = videoView.getDisplay() != null ? videoView.getDisplay().getRefreshRate() : 60f;
+        return (long) (1_000_000_000L / (refreshRate > 0 ? refreshRate : 60f));
+    }
+
+    private static final class PendingFrame {
+
+        final NdiVideoFrame frame;
+
+        final long capturedAt;
+
+        PendingFrame(NdiVideoFrame frame, long capturedAt) {
+            this.frame = frame;
+            this.capturedAt = capturedAt;
+        }
+    }
 
     private static float frameRate(NdiVideoFrame frame) {
         int d = frame.getFrameRateD();
@@ -545,21 +457,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         }
     }
 
-    private void safeReleaseAudioTrack() {
-        if (audioTrack == null) {
-            return;
-        }
-        try {
-            audioTrack.stop();
-        } catch (Throwable ignored) {
-        }
-        try {
-            audioTrack.release();
-        } catch (Throwable ignored) {
-        }
-        audioTrack = null;
-    }
-
     private void safeReleaseVideoFrames() {
         if (videoFramesReleased) {
             return;
@@ -572,7 +469,21 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         }
         safeCloseFrame(captureFrame);
         captureFrame = null;
-        safeCloseFrame(renderFrame.getAndSet(null));
+        PendingFrame pending;
+        while ((pending = pendingFrames.poll()) != null) {
+            safeCloseFrame(pending.frame);
+        }
+    }
+
+    private void safeCloseAudioPlayer() {
+        if (audioPlayer == null) {
+            return;
+        }
+        try {
+            audioPlayer.close();
+        } catch (Throwable ignored) {
+        }
+        audioPlayer = null;
     }
 
     private void safeCloseFrame(NdiVideoFrame frame) {
@@ -594,17 +505,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         } catch (Throwable ignored) {
         }
         frameSync = null;
-    }
-
-    private void safeCloseAudioReceiver() {
-        if (audioReceiver == null) {
-            return;
-        }
-        try {
-            audioReceiver.close();
-        } catch (Throwable ignored) {
-        }
-        audioReceiver = null;
     }
 
     private void safeCloseReceiver() {

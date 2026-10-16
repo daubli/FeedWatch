@@ -7,10 +7,9 @@ add_library(ndi-wrapper SHARED
     ndi-finder.cpp
     ndi-source.cpp
     ndi-video-frame.cpp
-    ndi-audio-frame.cpp
-    ndi-audio-utils.cpp
     ndi-receiver.cpp
     ndi-frame-sync.cpp
+    ndi-audio-player.cpp
 )
 
 # Tell CMake where to find headers (NDI SDK)
@@ -25,8 +24,12 @@ set_target_properties(ndi PROPERTIES
 # Find Android logging lib
 find_library(log-lib log)
 
-# Link NDI + logging
+# Oboe (AAudio, or OpenSL ES before Android 8.1) for audio output, from its prefab package
+find_package(oboe REQUIRED CONFIG)
+
+# Link NDI + Oboe + logging
 target_link_libraries(ndi-wrapper
     ndi
+    oboe::oboe
     ${log-lib}
 )

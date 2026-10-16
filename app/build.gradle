@@ -9,6 +9,11 @@ android {
         enabled = true
     }
 
+    buildFeatures {
+        // Oboe ships its native library as a prefab package
+        prefab true
+    }
+
     sourceSets {
         main {
             // The libs directory contains prebuilt libraries that are used by the
@@ -29,6 +34,8 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++17"
+                // required by the Oboe prefab package; libndi links its own C++ runtime statically
+                arguments "-DANDROID_STL=c++_shared"
             }
         }
     }
@@ -60,4 +67,5 @@ dependencies {
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
     implementation 'com.google.android.material:material:1.3.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
+    implementation 'com.google.oboe:oboe:1.9.3'
 }
