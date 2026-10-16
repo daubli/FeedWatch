@@ -16,8 +16,7 @@
 			android:supportsRtl="true"
 			android:name="de.daubli.feedwatch.FeedWatchApplication"
 			android:largeHeap="true"
-			android:hardwareAccelerated="true"
-			android:vmSafeMode="true">
+			android:hardwareAccelerated="true">
 		<activity
 				android:name="de.daubli.feedwatch.MainActivity"
 				android:exported="true"
