@@ -57,6 +57,11 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
     /** Rect in surface pixel coords where the video is actually drawn (for overlays). */
     private Rect videoRect = new Rect();
 
+    // the frame in the texture, drawn again when a render is requested without a new frame (GL thread only)
+    private FourCCType drawnType;
+
+    private int drawnWidth;
+
     // ------------------------------------------------------------
     // GL resources
     // ------------------------------------------------------------
@@ -148,6 +153,9 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        // a new surface has a new, empty texture
+        drawnType = null;
+
         // Blending (leave enabled only if you actually render alpha / overlays; otherwise can be disabled)
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
@@ -207,23 +215,39 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         final FourCCType type;
         final Runnable consumedCallback;
 
+        // frame and its callback are taken together, the producer may replace and release a frame at any time
         synchronized (lock) {
-            if (!frameAvailable) {
-                return;
+            if (frameAvailable) {
+                frame = pendingFrame;
+                w = frameWidth;
+                h = frameHeight;
+                type = frameType;
+                consumedCallback = pendingConsumedCallback;
+                pendingConsumedCallback = null;
+                frameAvailable = false;
+            } else {
+                frame = null;
+                w = 0;
+                h = 0;
+                type = null;
+                consumedCallback = null;
             }
-            frame = pendingFrame;
-            w = frameWidth;
-            h = frameHeight;
-            type = frameType;
-            consumedCallback = pendingConsumedCallback;
-            pendingConsumedCallback = null;
-            frameAvailable = false;
+        }
+
+        if (frame == null) {
+            // an overlay changed: the caller cleared the target, so the last frame has to be drawn again
+            if (drawnType != null) {
+                draw(drawnType, drawnWidth);
+            }
+            return;
         }
 
         uploadFrame(frame, type, w, h);
         if (consumedCallback != null) {
             consumedCallback.run();
         }
+        drawnType = type;
+        drawnWidth = w;
         draw(type, w);
     }
 
