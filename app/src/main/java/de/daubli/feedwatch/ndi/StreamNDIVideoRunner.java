@@ -323,6 +323,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private void startVideoCaptureThread() {
         videoCaptureThread = new Thread(() -> {
+            long lastTimestamp = NdiVideoFrame.TIMESTAMP_UNDEFINED;
             try {
                 while (running && !Thread.currentThread().isInterrupted()) {
                     try {
@@ -331,6 +332,16 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                         captureRequest.drainPermits();
 
                         if (frameSync != null && frameSync.captureVideo(captureFrame)) {
+                            // The frame sync repeats the last frame until a new one arrives (60 Hz display, 25 fps
+                            // source). A repeat is not handed to GL, uploading it again would only cost CPU; the
+                            // frame is kept as captureFrame and its buffer freed by the next capture. Without a
+                            // sender timestamp every frame is shown.
+                            long timestamp = captureFrame.getTimestamp();
+                            if (timestamp != NdiVideoFrame.TIMESTAMP_UNDEFINED && timestamp == lastTimestamp) {
+                                continue;
+                            }
+                            lastTimestamp = timestamp;
+
                             NdiVideoFrame skipped = renderFrame.getAndSet(captureFrame);
                             if (skipped != null) {
                                 recycleFrame(skipped);

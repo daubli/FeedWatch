@@ -30,6 +30,14 @@ extern "C" {
         return reinterpret_cast<NDIlib_video_frame_v2_t *>(pFrame)->frame_rate_D;
     }
 
+    JNIEXPORT jlong JNICALL Java_de_daubli_feedwatch_ndi_NdiVideoFrame_getTimecode(JNIEnv *env, jclass jClazz, jlong pFrame) {
+        return reinterpret_cast<NDIlib_video_frame_v2_t *>(pFrame)->timecode;
+    }
+
+    JNIEXPORT jlong JNICALL Java_de_daubli_feedwatch_ndi_NdiVideoFrame_getTimestamp(JNIEnv *env, jclass jClazz, jlong pFrame) {
+        return reinterpret_cast<NDIlib_video_frame_v2_t *>(pFrame)->timestamp;
+    }
+
     JNIEXPORT jobject JNICALL Java_de_daubli_feedwatch_ndi_NdiVideoFrame_getData(JNIEnv *env, jclass jClazz, jlong pFrame) {
         auto *frame = reinterpret_cast<NDIlib_video_frame_v2_t *>(pFrame);
         if(frame->p_data) {

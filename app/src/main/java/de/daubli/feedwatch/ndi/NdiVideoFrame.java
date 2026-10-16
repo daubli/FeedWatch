@@ -7,6 +7,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class NdiVideoFrame implements AutoCloseable {
 
+    // NDIlib_recv_timestamp_undefined
+    public static final long TIMESTAMP_UNDEFINED = Long.MAX_VALUE;
+
     final long instancePointer;
 
     AtomicReference<NdiFrameCleaner> allocatedBufferSource = new AtomicReference<>();
@@ -48,6 +51,21 @@ public class NdiVideoFrame implements AutoCloseable {
         return getFrameRateD(instancePointer);
     }
 
+    /**
+     * Timecode of the frame in 100 ns units, as set by the sender (or synthesized).
+     */
+    public long getTimecode() {
+        return getTimecode(instancePointer);
+    }
+
+    /**
+     * Time the frame was submitted by the sender in 100 ns units, or {@link #TIMESTAMP_UNDEFINED} if the sender
+     * does not provide it.
+     */
+    public long getTimestamp() {
+        return getTimestamp(instancePointer);
+    }
+
     public void freeBuffer() {
         if (allocatedBufferSource.get() != null) {
             allocatedBufferSource.getAndSet(null).freeVideo(this);
@@ -73,6 +91,10 @@ public class NdiVideoFrame implements AutoCloseable {
     private static native int getFrameRateN(long pointer);
 
     private static native int getFrameRateD(long pointer);
+
+    private static native long getTimecode(long pointer);
+
+    private static native long getTimestamp(long pointer);
 
     private static native ByteBuffer getData(long pointer);
 }
