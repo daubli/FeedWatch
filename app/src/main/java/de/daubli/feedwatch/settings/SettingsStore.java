@@ -2,6 +2,9 @@ package de.daubli.feedwatch.settings;
 
 import static de.daubli.feedwatch.FeedWatchApplication.getAppContext;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.commons.lang3.StringUtils;
 
 import android.content.Context;
@@ -55,6 +58,26 @@ public class SettingsStore {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putString(ADDITIONAL_SOURCES_KEY, additionalSourcesValue);
         editor.apply();
+    }
+
+    /**
+     * The additional sources as a list, one IP address per entry.
+     */
+    public List<String> getAdditionalSourceList() {
+        List<String> sources = new ArrayList<>();
+        String value = getAdditionalSources();
+        if (value != null) {
+            for (String source : value.split(",")) {
+                if (!source.isEmpty()) {
+                    sources.add(source);
+                }
+            }
+        }
+        return sources;
+    }
+
+    public void setAdditionalSourceList(List<String> sources) {
+        setAdditionalSources(String.join(",", sources));
     }
 
     private String trimAndFormatAdditionalSourcesValue(String additionalSources) {

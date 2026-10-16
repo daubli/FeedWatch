@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outlined text fields: accent while focused, a visible outline otherwise -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/fw_accent" android:state_focused="true"/>
+    <item android:color="@color/fw_outline_strong"/>
+</selector>

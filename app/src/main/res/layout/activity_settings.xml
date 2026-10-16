@@ -48,26 +48,88 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_additional_sources"
+                        android:textColor="@color/fw_text_primary"
+                        android:textSize="16sp"/>
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:lineSpacingMultiplier="1.15"
+                        android:text="@string/settings_additional_sources_summary"
+                        android:textColor="@color/fw_text_secondary"
+                        android:textSize="13sp"/>
+
+                <!-- one block per address, filled by SettingsActivity -->
+                <LinearLayout
+                        android:id="@+id/additionalSourcesList"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/settings_additional_sources"
-                        app:boxStrokeColor="@color/fw_accent"
-                        app:helperText="@string/settings_additional_sources_helper"
-                        app:hintTextColor="@color/fw_accent">
+                        android:layout_marginTop="8dp"
+                        android:orientation="vertical"/>
 
-                    <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/additionalSourcesEditText"
-                            android:layout_width="match_parent"
+                <TextView
+                        android:id="@+id/additionalSourcesEmpty"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:padding="12dp"
+                        android:text="@string/settings_additional_sources_empty"
+                        android:textColor="@color/fw_text_disabled"
+                        android:textSize="14sp"/>
+
+                <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="top"
+                        android:orientation="horizontal">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/additionalSourceInputLayout"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:imeOptions="actionDone"
-                            android:inputType="textNoSuggestions|textUri"
-                            android:maxLines="3"
-                            android:textColor="@color/fw_text_primary"
-                            android:textSize="15sp"
-                            tools:text="192.168.1.20,192.168.1.21"/>
-                </com.google.android.material.textfield.TextInputLayout>
+                            android:layout_weight="1"
+                            android:hint="@string/settings_additional_source_hint"
+                            app:boxStrokeColor="@color/text_input_box_stroke"
+                            app:hintTextColor="@color/fw_accent">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/additionalSourceInput"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:digits="0123456789."
+                                android:fontFeatureSettings="tnum"
+                                android:imeOptions="actionDone"
+                                android:inputType="numberDecimal"
+                                android:maxLength="15"
+                                android:maxLines="1"
+                                android:textColor="@color/fw_text_primary"
+                                android:textSize="15sp"
+                                tools:text="192.168.1.21"/>
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                            android:id="@+id/additionalSourceAdd"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="56dp"
+                            android:layout_marginStart="8dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="@string/settings_additional_source_add"
+                            android:textColor="@color/fw_accent"
+                            app:cornerRadius="4dp"
+                            app:icon="@drawable/ic_add"
+                            app:iconTint="@color/fw_accent"
+                            app:strokeColor="@color/fw_accent"/>
+                </LinearLayout>
             </LinearLayout>
 
             <TextView

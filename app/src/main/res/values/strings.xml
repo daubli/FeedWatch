@@ -23,7 +23,13 @@
     <!-- Settings -->
     <string name="settings_section_network">Network</string>
     <string name="settings_additional_sources">Additional NDI sources</string>
-    <string name="settings_additional_sources_helper">Comma-separated IP addresses, for senders outside mDNS discovery</string>
+    <string name="settings_additional_sources_summary">IP addresses of NDI senders outside mDNS discovery</string>
+    <string name="settings_additional_sources_empty">No additional sources yet</string>
+    <string name="settings_additional_source_hint">IP address</string>
+    <string name="settings_additional_source_add">Add</string>
+    <string name="settings_additional_source_remove">Remove source</string>
+    <string name="settings_additional_source_invalid">Enter an IP address like 192.168.1.20</string>
+    <string name="settings_additional_source_duplicate">This address is already in the list</string>
     <string name="settings_section_stream">Stream</string>
     <string name="settings_low_bandwidth">Low bandwidth mode</string>
     <string name="settings_low_bandwidth_summary">Receive the lower-quality NDI proxy stream to save bandwidth and battery</string>

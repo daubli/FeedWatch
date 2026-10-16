@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              xmlns:tools="http://schemas.android.com/tools"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:layout_marginTop="8dp"
+              android:background="@drawable/bg_ip_block"
+              android:gravity="center_vertical"
+              android:minHeight="52dp"
+              android:orientation="horizontal"
+              android:paddingStart="14dp"
+              android:paddingEnd="4dp">
+
+    <TextView
+            android:layout_width="44dp"
+            android:layout_height="22dp"
+            android:background="@drawable/bg_badge_ndi"
+            android:gravity="center"
+            android:text="@string/badge_ndi"
+            android:textAppearance="@style/TextAppearance.FeedWatch.Badge"/>
+
+    <TextView
+            android:id="@+id/additionalSourceAddress"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFeatureSettings="tnum"
+            android:maxLines="1"
+            android:textColor="@color/fw_text_primary"
+            android:textSize="16sp"
+            tools:text="192.168.1.20"/>
+
+    <ImageButton
+            android:id="@+id/additionalSourceRemove"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings_additional_source_remove"
+            android:src="@drawable/ic_close"
+            app:tint="@color/fw_text_secondary"/>
+</LinearLayout>
