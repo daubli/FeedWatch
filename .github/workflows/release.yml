@@ -31,6 +31,10 @@ jobs:
           link-to-sdk: true
           local-cache: true
 
+      # app/build.gradle pins this version, the runner only ships newer ones
+      - name: Install CMake 3.22.1
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "cmake;3.22.1"'
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
