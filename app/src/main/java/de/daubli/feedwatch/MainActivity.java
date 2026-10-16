@@ -21,8 +21,6 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.animation.AlphaAnimation;
-import android.view.animation.Animation;
 import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -59,8 +57,6 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView sourceCount;
 
-    private View scanIndicator;
-
     private SwipeRefreshLayout swipeRefreshLayout;
 
     private final List<VideoSource> currentSources = new ArrayList<>();
@@ -88,7 +84,6 @@ public class MainActivity extends AppCompatActivity {
         sourceListView = findViewById(R.id.sourceListView);
         emptyState = findViewById(R.id.emptyState);
         sourceCount = findViewById(R.id.sourceCount);
-        scanIndicator = findViewById(R.id.scanIndicator);
         swipeRefreshLayout = findViewById(R.id.swipeToRefresh);
 
         Ndi.initialize();
@@ -189,8 +184,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        startScanIndicator();
-
         scanExecutor = Executors.newSingleThreadExecutor();
         scheduler = Executors.newSingleThreadScheduledExecutor();
         // shutdownNow() in stopBackgroundScanning() drops a queued scan before its finally block runs
@@ -203,7 +196,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopBackgroundScanning() {
         ndiDiscoveryManager.stopDiscovery();
-        scanIndicator.clearAnimation();
 
         if (scheduler != null) {
             scheduler.shutdownNow();
@@ -213,14 +205,6 @@ public class MainActivity extends AppCompatActivity {
             scanExecutor.shutdownNow();
             scanExecutor = null;
         }
-    }
-
-    private void startScanIndicator() {
-        Animation pulse = new AlphaAnimation(1f, 0.2f);
-        pulse.setDuration(800);
-        pulse.setRepeatMode(Animation.REVERSE);
-        pulse.setRepeatCount(Animation.INFINITE);
-        scanIndicator.startAnimation(pulse);
     }
 
     private void triggerManualRefresh() {

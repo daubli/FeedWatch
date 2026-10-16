@@ -7,7 +7,6 @@
 
     <!-- Source list -->
     <string name="sources_header">Sources</string>
-    <string name="sources_scanning">Scanning</string>
     <string name="sources_empty_title">No sources found</string>
     <string name="sources_empty_body">Make sure this device is on the same network as your NDI senders, or connect a UVC capture card.\nPull down to refresh.</string>
     <string name="badge_ndi">NDI</string>

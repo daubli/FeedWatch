@@ -44,25 +44,6 @@
                 android:text="0"
                 android:textAppearance="@style/TextAppearance.FeedWatch.Badge"
                 tools:ignore="HardcodedText"/>
-
-        <Space
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1"/>
-
-        <View
-                android:id="@+id/scanIndicator"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:layout_marginEnd="6dp"
-                android:background="@drawable/dot_live"/>
-
-        <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/sources_scanning"
-                android:textColor="@color/fw_text_secondary"
-                android:textSize="12sp"/>
     </LinearLayout>
 
     <FrameLayout
