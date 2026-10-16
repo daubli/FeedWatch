@@ -14,6 +14,11 @@
     <string name="source_usb_subtitle">UVC capture device</string>
     <string name="source_unavailable">Source unavailable. Please refresh.</string>
     <string name="usb_permission_denied">USB permission denied.</string>
+    <string name="badge_default">DEFAULT</string>
+    <string name="default_source_set">Set as default source</string>
+    <string name="default_source_clear">Remove as default source</string>
+    <string name="default_source_opening">Opening default source %1$s…</string>
+    <string name="default_source_cancel">Cancel</string>
 
     <!-- Settings -->
     <string name="settings_section_network">Network</string>
@@ -24,6 +29,11 @@
     <string name="settings_low_bandwidth_summary">Receive the lower-quality NDI proxy stream to save bandwidth and battery</string>
     <string name="settings_viewer_mode">Viewer mode</string>
     <string name="settings_viewer_mode_summary">Show only the picture. Monitoring tools and stream info are hidden, close and audio stay available</string>
+    <string name="settings_section_sources">Sources</string>
+    <string name="settings_default_source">Default source</string>
+    <string name="settings_default_source_none">None. Long-press a source in the list to make it the default.</string>
+    <string name="settings_default_source_summary">%1$s opens automatically when the app starts and the source is available</string>
+    <string name="settings_default_source_remove">Remove default source</string>
     <string name="settings_save">Save</string>
     <string name="about_version">Version %1$s</string>
 

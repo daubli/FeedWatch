@@ -5,6 +5,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import de.daubli.feedwatch.settings.SettingsStore;
@@ -16,6 +17,10 @@ public class SettingsActivity extends AppCompatActivity {
     CompoundButton lowBandwidthModeEnabledSwitch;
 
     CompoundButton viewerModeEnabledSwitch;
+
+    TextView defaultSourceSummary;
+
+    View defaultSourceRemoveButton;
 
     private SettingsStore settingsStore;
 
@@ -30,12 +35,20 @@ public class SettingsActivity extends AppCompatActivity {
         additionalSourcesEditText = findViewById(R.id.additionalSourcesEditText);
         lowBandwidthModeEnabledSwitch = findViewById(R.id.lowBandwidthMode);
         viewerModeEnabledSwitch = findViewById(R.id.viewerMode);
+        defaultSourceSummary = findViewById(R.id.defaultSourceSummary);
+        defaultSourceRemoveButton = findViewById(R.id.defaultSourceRemove);
 
         // the whole row toggles the switch
         findViewById(R.id.lowBandwidthRow).setOnClickListener(v -> lowBandwidthModeEnabledSwitch.toggle());
         findViewById(R.id.viewerModeRow).setOnClickListener(v -> viewerModeEnabledSwitch.toggle());
 
         settingsStore = new SettingsStore();
+
+        // removed right away, the source may not be in the list to remove it there
+        defaultSourceRemoveButton.setOnClickListener(v -> {
+            settingsStore.clearDefaultSource();
+            bindDefaultSource();
+        });
 
         Button button = findViewById(R.id.saveBtn);
         button.setOnClickListener((View v) -> {
@@ -52,5 +65,15 @@ public class SettingsActivity extends AppCompatActivity {
         this.additionalSourcesEditText.setText(settingsStore.getAdditionalSources());
         this.lowBandwidthModeEnabledSwitch.setChecked(settingsStore.isLowBandwidthModeEnabled());
         this.viewerModeEnabledSwitch.setChecked(settingsStore.isViewerModeEnabled());
+        bindDefaultSource();
+    }
+
+    private void bindDefaultSource() {
+        boolean hasDefault = settingsStore.getDefaultSourceKey() != null;
+        String label = settingsStore.getDefaultSourceLabel();
+        defaultSourceSummary.setText(hasDefault
+                ? getString(R.string.settings_default_source_summary, label != null ? label : "")
+                : getString(R.string.settings_default_source_none));
+        defaultSourceRemoveButton.setVisibility(hasDefault ? View.VISIBLE : View.GONE);
     }
 }

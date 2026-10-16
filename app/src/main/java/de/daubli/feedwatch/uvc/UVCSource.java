@@ -19,4 +19,10 @@ public class UVCSource implements VideoSource {
     public String getSourceName() {
         return usbDevice.getProductName();
     }
+
+    // vendor and product id instead of the name: the name can be empty, the serial needs USB permission
+    @Override
+    public String getStableKey() {
+        return "uvc:" + usbDevice.getVendorId() + ":" + usbDevice.getProductId();
+    }
 }

@@ -18,6 +18,11 @@ public class NdiSource implements VideoSource {
         return name;
     }
 
+    @Override
+    public String getStableKey() {
+        return "ndi:" + name;
+    }
+
     public String getUrlAddress() {
         return urlAddress;
     }

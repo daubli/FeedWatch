@@ -23,9 +23,12 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 import androidx.annotation.MainThread;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.Lifecycle;
 import com.google.android.material.appbar.MaterialToolbar;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import de.daubli.feedwatch.ndi.Ndi;
@@ -44,6 +47,9 @@ public class MainActivity extends AppCompatActivity {
     private static final int SCAN_TIMEOUT_MS = 2000;
 
     private static final long SCAN_PERIOD_MS = 2000;
+
+    // time to cancel opening the default source before it starts
+    private static final long AUTO_START_DELAY_MS = 1500;
 
     private NdiFinder finder;
 
@@ -73,6 +79,17 @@ public class MainActivity extends AppCompatActivity {
 
     private static volatile VideoSource selectedSource;
 
+    // the default source opens once per app start; set when it did, or when the user opened or cancelled a source first
+    private static boolean autoStartConsumed;
+
+    private SettingsStore settingsStore;
+
+    @Nullable
+    private Runnable pendingAutoStart;
+
+    @Nullable
+    private Snackbar autoStartSnackbar;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -88,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
 
         Ndi.initialize();
 
-        SettingsStore settingsStore = new SettingsStore();
+        settingsStore = new SettingsStore();
         ndiDiscoveryManager = new NdiDiscoveryManager(getApplicationContext());
 
         finder = new NdiFinder(false, null, settingsStore.getAdditionalSources());
@@ -98,6 +115,7 @@ public class MainActivity extends AppCompatActivity {
         sourceListView.setAdapter(adapter);
 
         sourceListView.setOnItemClickListener(this::onSourceClicked);
+        sourceListView.setOnItemLongClickListener(this::onSourceLongClicked);
 
         swipeRefreshLayout.setColorSchemeResources(R.color.fw_accent);
         swipeRefreshLayout.setProgressBackgroundColorSchemeResource(R.color.fw_surface_raised);
@@ -128,6 +146,8 @@ public class MainActivity extends AppCompatActivity {
             Log.e("MainActivity", "USB attach intent without device");
             return;
         }
+
+        autoStartConsumed = true;
 
         Log.d("MainActivity", "USB attached: "
                 + device.getDeviceName()
@@ -161,8 +181,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // the default may have been removed in the settings
+        adapter.setDefaultSourceKey(settingsStore.getDefaultSourceKey());
+        maybeAutoStartDefault();
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
+        cancelPendingAutoStart();
         stopBackgroundScanning();
     }
 
@@ -243,10 +272,10 @@ public class MainActivity extends AppCompatActivity {
         Map<String, VideoSource> nextByKey = new LinkedHashMap<>();
 
         for (VideoSource s : ndiSources) {
-            nextByKey.put("ndi:" + s.getSourceName(), s);
+            nextByKey.put(s.getStableKey(), s);
         }
         for (VideoSource s : uvcSources) {
-            nextByKey.put("uvc:" + s.getSourceName(), s);
+            nextByKey.put(s.getStableKey(), s);
         }
 
         List<VideoSource> nextList = new ArrayList<>(nextByKey.values());
@@ -289,6 +318,71 @@ public class MainActivity extends AppCompatActivity {
 
         sourceCount.setText(String.valueOf(currentSources.size()));
         emptyState.setVisibility(currentSources.isEmpty() ? View.VISIBLE : View.GONE);
+
+        maybeAutoStartDefault();
+    }
+
+    @MainThread
+    private void maybeAutoStartDefault() {
+        if (autoStartConsumed || pendingAutoStart != null
+                || !getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+            return;
+        }
+
+        VideoSource defaultSource = findDefaultSource();
+        if (defaultSource == null) {
+            return;
+        }
+
+        pendingAutoStart = () -> {
+            pendingAutoStart = null;
+            autoStartSnackbar = null;
+            // it may have disappeared during the delay, then the next scan that finds it tries again
+            VideoSource stillAvailable = findDefaultSource();
+            if (stillAvailable != null) {
+                openSource(stillAvailable);
+            }
+        };
+
+        autoStartSnackbar = Snackbar.make(sourceListView,
+                        getString(R.string.default_source_opening, sourceLabel(defaultSource)),
+                        Snackbar.LENGTH_INDEFINITE)
+                .setAction(R.string.default_source_cancel, v -> {
+                    cancelPendingAutoStart();
+                    autoStartConsumed = true;
+                });
+        autoStartSnackbar.show();
+        mainHandler.postDelayed(pendingAutoStart, AUTO_START_DELAY_MS);
+    }
+
+    private void cancelPendingAutoStart() {
+        if (pendingAutoStart != null) {
+            mainHandler.removeCallbacks(pendingAutoStart);
+            pendingAutoStart = null;
+        }
+        if (autoStartSnackbar != null) {
+            autoStartSnackbar.dismiss();
+            autoStartSnackbar = null;
+        }
+    }
+
+    @Nullable
+    private VideoSource findDefaultSource() {
+        String defaultKey = settingsStore.getDefaultSourceKey();
+        if (defaultKey == null) {
+            return null;
+        }
+        for (VideoSource source : currentSources) {
+            if (defaultKey.equals(source.getStableKey())) {
+                return source;
+            }
+        }
+        return null;
+    }
+
+    private String sourceLabel(VideoSource source) {
+        String name = source.getSourceName();
+        return name != null && !name.isEmpty() ? name : getString(R.string.badge_usb);
     }
 
     private void onSourceClicked(AdapterView<?> parent, View view, int position, long id) {
@@ -296,7 +390,38 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        VideoSource chosen = currentSources.get(position);
+        openSource(currentSources.get(position));
+    }
+
+    private boolean onSourceLongClicked(AdapterView<?> parent, View view, int position, long id) {
+        if (position < 0 || position >= currentSources.size()) {
+            return false;
+        }
+
+        VideoSource source = currentSources.get(position);
+        boolean isDefault = source.getStableKey().equals(settingsStore.getDefaultSourceKey());
+
+        PopupMenu menu = new PopupMenu(this, view);
+        menu.getMenu().add(isDefault ? R.string.default_source_clear : R.string.default_source_set);
+        menu.setOnMenuItemClickListener(item -> {
+            if (isDefault) {
+                settingsStore.clearDefaultSource();
+            } else {
+                settingsStore.setDefaultSource(source.getStableKey(), sourceLabel(source));
+                // the user is choosing right now, so do not jump into the stream
+                cancelPendingAutoStart();
+                autoStartConsumed = true;
+            }
+            adapter.setDefaultSourceKey(settingsStore.getDefaultSourceKey());
+            return true;
+        });
+        menu.show();
+        return true;
+    }
+
+    private void openSource(VideoSource chosen) {
+        cancelPendingAutoStart();
+        autoStartConsumed = true;
 
         if (chosen instanceof NdiSource) {
             try {

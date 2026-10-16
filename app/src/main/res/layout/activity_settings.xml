@@ -76,6 +76,59 @@
                     android:layout_marginStart="4dp"
                     android:layout_marginTop="24dp"
                     android:layout_marginBottom="8dp"
+                    android:text="@string/settings_section_sources"
+                    android:textAllCaps="true"
+                    android:textAppearance="@style/TextAppearance.FeedWatch.SectionLabel"/>
+
+            <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_settings_card"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_default_source"
+                            android:textColor="@color/fw_text_primary"
+                            android:textSize="16sp"/>
+
+                    <TextView
+                            android:id="@+id/defaultSourceSummary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:lineSpacingMultiplier="1.15"
+                            android:textColor="@color/fw_text_secondary"
+                            android:textSize="13sp"
+                            tools:text="@string/settings_default_source_none"/>
+                </LinearLayout>
+
+                <ImageButton
+                        android:id="@+id/defaultSourceRemove"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings_default_source_remove"
+                        android:src="@drawable/ic_close"
+                        app:tint="@color/fw_text_secondary"/>
+            </LinearLayout>
+
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginTop="24dp"
+                    android:layout_marginBottom="8dp"
                     android:text="@string/settings_section_stream"
                     android:textAllCaps="true"
                     android:textAppearance="@style/TextAppearance.FeedWatch.SectionLabel"/>

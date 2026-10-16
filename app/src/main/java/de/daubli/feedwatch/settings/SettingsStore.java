@@ -28,6 +28,10 @@ public class SettingsStore {
 
     private static final String VIEWER_MODE_ENABLED_KEY = "de.daubli.feedwatch.view.viewermode.enabled";
 
+    private static final String DEFAULT_SOURCE_KEY = "de.daubli.feedwatch.sources.default.key";
+
+    private static final String DEFAULT_SOURCE_LABEL_KEY = "de.daubli.feedwatch.sources.default.label";
+
     public SettingsStore() {
         sharedPreferences = getAppContext().getSharedPreferences("de.daubli.feedwatch_preferences",
                 Context.MODE_PRIVATE);
@@ -147,6 +151,36 @@ public class SettingsStore {
     public void setViewerModeEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(VIEWER_MODE_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * Stable key of the source that is opened automatically once per app start, or null if there is none.
+     */
+    @Nullable
+    public String getDefaultSourceKey() {
+        return sharedPreferences.getString(DEFAULT_SOURCE_KEY, null);
+    }
+
+    /**
+     * Name of the default source, so it can be shown while the source is unavailable.
+     */
+    @Nullable
+    public String getDefaultSourceLabel() {
+        return sharedPreferences.getString(DEFAULT_SOURCE_LABEL_KEY, null);
+    }
+
+    public void setDefaultSource(String key, String label) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(DEFAULT_SOURCE_KEY, key);
+        editor.putString(DEFAULT_SOURCE_LABEL_KEY, label);
+        editor.apply();
+    }
+
+    public void clearDefaultSource() {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.remove(DEFAULT_SOURCE_KEY);
+        editor.remove(DEFAULT_SOURCE_LABEL_KEY);
         editor.apply();
     }
 }
