@@ -9,7 +9,7 @@ NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vi
 
 ### Video Sources
 
-![Source list](img/sources.jpeg)
+<img src="img/sources.jpeg" alt="Source list" width="300">
 
 All sources the app finds are listed on the start screen: NDI® sources from the network and UVC devices connected
 via USB. The list updates itself in the background, pull down to refresh it right away. Tap a source to open it.
@@ -20,7 +20,7 @@ via USB. The list updates itself in the background, pull down to refresh it righ
     - NDI® senders outside mDNS discovery can be added by their IP address in the Settings. The dot after
       a full block of three digits is added for you. Changes apply right away.
 
-      ![Additional NDI sources in the settings](img/settings.jpeg)
+      <img src="img/settings.jpeg" alt="Additional NDI sources in the settings" width="300">
     - **NDI® HX** is currently not supported. I invested some effort and implemented
   a working prototype. However, in order to receive NDI® HX streams for
   longer than 5 minutes, you need currently a NDI® Advanced SDK license.
@@ -40,12 +40,12 @@ via USB. The list updates itself in the background, pull down to refresh it righ
 Long-press a source and choose **Set as default source** to open it automatically. There can only be one default
 source, it is marked with a **DEFAULT** badge.
 
-![Setting the default source](img/source-menu.jpeg)
+<img src="img/source-menu.jpeg" alt="Setting the default source" width="300">
 
 Once per app start, the default source opens as soon as it is available. A short countdown is shown before, tap
 **Cancel** to stay on the source list. Closing the stream returns to the list without opening the source again.
 
-![Default source countdown](img/default-source.jpeg)
+<img src="img/default-source.jpeg" alt="Default source countdown" width="300">
 
 The default source can also be removed in the Settings, even while it is not available.
 
@@ -109,6 +109,8 @@ buttons remain. It can be enabled in the Settings.
 - **Luma** or **RGB** waveform with the red, green and blue traces on top of each other: long-press the **WFM** button
   to choose
 - Drag it with one finger to move it, pinch with two fingers to resize it, its place and size are remembered
+
+![Waveform Monitor Example](img/waveform.jpeg)
 
 ---
 
