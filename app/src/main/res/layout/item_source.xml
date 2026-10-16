@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              xmlns:tools="http://schemas.android.com/tools"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:background="@drawable/bg_source_row"
+              android:gravity="center_vertical"
+              android:minHeight="72dp"
+              android:orientation="horizontal"
+              android:paddingStart="14dp"
+              android:paddingTop="12dp"
+              android:paddingEnd="8dp"
+              android:paddingBottom="12dp">
+
+    <TextView
+            android:id="@+id/sourceBadge"
+            android:layout_width="44dp"
+            android:layout_height="26dp"
+            android:background="@drawable/bg_badge_ndi"
+            android:gravity="center"
+            android:textAppearance="@style/TextAppearance.FeedWatch.Badge"
+            tools:text="NDI"/>
+
+    <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+        <TextView
+                android:id="@+id/sourceTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/fw_text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="Camera 1"/>
+
+        <TextView
+                android:id="@+id/sourceSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/fw_text_secondary"
+                android:textSize="13sp"
+                tools:text="STUDIO-PC · 192.168.1.20:5961"/>
+    </LinearLayout>
+
+    <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="@color/fw_text_disabled"/>
+</LinearLayout>

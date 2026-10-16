@@ -9,6 +9,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.*;
+import android.widget.TextView;
+import java.util.Locale;
+
 import androidx.appcompat.app.AppCompatActivity;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
 import de.daubli.feedwatch.ndi.NdiSource;
@@ -34,6 +37,16 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private Runnable hideMenuCallback;
 
+    private boolean hudShown;
+
+    private int lastVideoWidth;
+
+    private int lastVideoHeight;
+
+    private float lastFrameRate = -1f;
+
+    private String lastFormat;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -44,8 +57,10 @@ public class StreamVideoActivity extends AppCompatActivity {
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         initMenu();
+        initHud();
         setFullScreen();
         initSavedState();
+        showMenuAndScheduleHide();
     }
 
     private VideoSource resolveVideoSource(Intent intent) {
@@ -92,28 +107,33 @@ public class StreamVideoActivity extends AppCompatActivity {
         SettingsStore settingsStore = new SettingsStore();
         if (settingsStore.isFramingHelperOverlayEnabled()) {
             viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
-            viewBinding.gridButton.setImageResource(R.drawable.grid_icon_3x3_selected);
+            viewBinding.gridButton.setActivated(true);
         }
         if (settingsStore.isFocusAssistEnabled()) {
             viewBinding.openGLVideoView.setFocusAssistEnabled(true);
-            viewBinding.focusAssistButton.setImageResource(R.drawable.focus_assist_selected);
+            viewBinding.focusAssistButton.setActivated(true);
         }
         if (settingsStore.isZebraEnabled()) {
             viewBinding.openGLVideoView.setZebraOverlayEnabled(true);
-            viewBinding.zebraButton.setImageResource(R.drawable.zebra_selected);
+            viewBinding.zebraButton.setActivated(true);
         }
-        if (settingsStore.isTallyEnabled()) {
+        if (settingsStore.isTallyEnabled() && !(videoSource instanceof UVCSource)) {
             viewBinding.tallyOverlayView.setVisibility(View.VISIBLE);
             viewBinding.tallyOverlayView.setTallyEnabled(true);
-            viewBinding.tallyButton.setImageResource(R.drawable.tally_selected);
-            viewBinding.tallyOverlayView.bringToFront();
-            viewBinding.menuLayout.bringToFront();
+            viewBinding.tallyButton.setActivated(true);
         }
     }
 
     private void showMenuAndScheduleHide() {
-        viewBinding.menuLayout.setVisibility(View.VISIBLE);
-        viewBinding.menuLayout.bringToFront();
+        hudShown = true;
+        View hud = viewBinding.hudLayout;
+        // cancelling also drops a pending fade-out end action
+        hud.animate().cancel();
+        if (hud.getVisibility() != View.VISIBLE) {
+            hud.setAlpha(0f);
+            hud.setVisibility(View.VISIBLE);
+        }
+        hud.animate().alpha(1f).setDuration(150);
 
         menuHandler.removeCallbacks(hideMenuCallback);
         menuHandler.postDelayed(hideMenuCallback, MENU_HIDE_DELAY_MS);
@@ -121,7 +141,14 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void hideMenuNow() {
         menuHandler.removeCallbacks(hideMenuCallback);
-        viewBinding.menuLayout.setVisibility(View.GONE);
+        fadeOutHud();
+    }
+
+    private void fadeOutHud() {
+        hudShown = false;
+        View hud = viewBinding.hudLayout;
+        hud.animate().cancel();
+        hud.animate().alpha(0f).setDuration(200).withEndAction(() -> hud.setVisibility(View.GONE));
     }
 
     private void extendMenuTimeout() {
@@ -131,12 +158,15 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void initShowHideMenu() {
         this.menuHandler = new Handler(Looper.getMainLooper());
-        this.hideMenuCallback = () -> viewBinding.menuLayout.setVisibility(View.GONE);
+        this.hideMenuCallback = this::fadeOutHud;
 
-        viewBinding.menuLayout.setOnClickListener(v -> extendMenuTimeout());
+        // taps on the bars keep the HUD open instead of falling through to the video view
+        viewBinding.topBar.setOnClickListener(v -> extendMenuTimeout());
+        viewBinding.bottomBar.setOnClickListener(v -> extendMenuTimeout());
 
-        viewBinding.openGLVideoView.setOnClickListener(v -> {
-            if (viewBinding.menuLayout.getVisibility() == View.VISIBLE) {
+        // on the root rather than the video view, which stays invisible until the first frame arrives
+        viewBinding.getRoot().setOnClickListener(v -> {
+            if (hudShown) {
                 hideMenuNow();
             } else {
                 showMenuAndScheduleHide();
@@ -146,14 +176,15 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void initializeZebraButton() {
         viewBinding.zebraButton.setOnClickListener(view -> {
+            extendMenuTimeout();
             SettingsStore settingsStore = new SettingsStore();
             if (settingsStore.isZebraEnabled()) {
                 viewBinding.openGLVideoView.setZebraOverlayEnabled(false);
-                viewBinding.zebraButton.setImageResource(R.drawable.zebra);
+                viewBinding.zebraButton.setActivated(false);
                 settingsStore.setZebraEnabled(false);
             } else {
                 viewBinding.openGLVideoView.setZebraOverlayEnabled(true);
-                viewBinding.zebraButton.setImageResource(R.drawable.zebra_selected);
+                viewBinding.zebraButton.setActivated(true);
                 settingsStore.setZebraEnabled(true);
             }
         });
@@ -161,14 +192,15 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void initializeToggleFocusAssistButton() {
         viewBinding.focusAssistButton.setOnClickListener(view -> {
+            extendMenuTimeout();
             SettingsStore settingsStore = new SettingsStore();
             if (settingsStore.isFocusAssistEnabled()) {
                 viewBinding.openGLVideoView.setFocusAssistEnabled(false);
-                viewBinding.focusAssistButton.setImageResource(R.drawable.focus_assist);
+                viewBinding.focusAssistButton.setActivated(false);
                 settingsStore.setFocusAssistEnabled(false);
             } else {
                 viewBinding.openGLVideoView.setFocusAssistEnabled(true);
-                viewBinding.focusAssistButton.setImageResource(R.drawable.focus_assist_selected);
+                viewBinding.focusAssistButton.setActivated(true);
                 settingsStore.setFocusAssistEnabled(true);
             }
         });
@@ -176,42 +208,114 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void initializeToggleGridButton() {
         viewBinding.gridButton.setOnClickListener(view -> {
+            extendMenuTimeout();
             SettingsStore settingsStore = new SettingsStore();
             if (viewBinding.framingHelperOverlayView.getVisibility() == View.VISIBLE) {
                 viewBinding.framingHelperOverlayView.setVisibility(View.GONE);
-                viewBinding.gridButton.setImageResource(R.drawable.grid_icon_3x3);
+                viewBinding.gridButton.setActivated(false);
                 settingsStore.setFramingHelperOverlayEnabled(false);
             } else {
                 viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
-                viewBinding.gridButton.setImageResource(R.drawable.grid_icon_3x3_selected);
+                viewBinding.gridButton.setActivated(true);
                 settingsStore.setFramingHelperOverlayEnabled(true);
-                viewBinding.framingHelperOverlayView.bringToFront();
-                viewBinding.menuLayout.bringToFront();
             }
         });
     }
 
     private void initializeTallyButton() {
+        // tally is NDI-only
         if (videoSource instanceof UVCSource) {
-            viewBinding.gridButton.setVisibility(View.GONE);
+            viewBinding.tallyButton.setVisibility(View.GONE);
             return;
         }
 
         viewBinding.tallyButton.setOnClickListener(view -> {
+            extendMenuTimeout();
             SettingsStore settingsStore = new SettingsStore();
 
             boolean enabled = !viewBinding.tallyOverlayView.isTallyEnabled();
 
             viewBinding.tallyOverlayView.setTallyEnabled(enabled);
             viewBinding.tallyOverlayView.setVisibility(enabled ? View.VISIBLE : View.GONE);
-            viewBinding.tallyButton.setImageResource(enabled ? R.drawable.tally_selected : R.drawable.tally);
+            viewBinding.tallyButton.setActivated(enabled);
             settingsStore.setTallyEnabled(enabled);
-
-            if (enabled) {
-                viewBinding.tallyOverlayView.bringToFront();
-                viewBinding.menuLayout.bringToFront();
-            }
         });
+    }
+
+    private void initHud() {
+        boolean isUvc = videoSource instanceof UVCSource;
+
+        viewBinding.sourceTypeBadge.setText(isUvc ? R.string.badge_usb : R.string.badge_ndi);
+        viewBinding.sourceTypeBadge.setBackgroundResource(isUvc ? R.drawable.bg_badge_usb : R.drawable.bg_badge_ndi);
+        viewBinding.sourceNameText.setText(videoSource != null ? videoSource.getSourceName() : null);
+
+        // tally and audio only exist for NDI sources
+        viewBinding.tallyChip.setVisibility(isUvc ? View.GONE : View.VISIBLE);
+        viewBinding.audioMeterView.setVisibility(isUvc ? View.GONE : View.VISIBLE);
+        viewBinding.lowBandwidthChip.setVisibility(
+                !isUvc && new SettingsStore().isLowBandwidthModeEnabled() ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * Called on the main thread by the stream runner for every rendered frame.
+     *
+     * @param frameRate nominal or measured frames per second, or 0 if unknown
+     */
+    public void onVideoFormat(int width, int height, float frameRate, String format) {
+        if (width != lastVideoWidth || height != lastVideoHeight) {
+            lastVideoWidth = width;
+            lastVideoHeight = height;
+            viewBinding.resolutionChip.setText(String.format(Locale.US, "%d×%d", width, height));
+        }
+        if (frameRate != lastFrameRate) {
+            lastFrameRate = frameRate;
+            setChip(viewBinding.fpsChip, frameRate > 0 ? formatFrameRate(frameRate) : null);
+        }
+        if (!format.equals(lastFormat)) {
+            lastFormat = format;
+            setChip(viewBinding.formatChip, format);
+        }
+    }
+
+    private static String formatFrameRate(float frameRate) {
+        if (Math.abs(frameRate - Math.round(frameRate)) < 0.01f) {
+            return String.format(Locale.US, "%d fps", Math.round(frameRate));
+        }
+        return String.format(Locale.US, "%.2f fps", frameRate);
+    }
+
+    private static void setChip(TextView chip, String text) {
+        chip.setText(text);
+        chip.setVisibility(text != null ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * Called on the main thread whenever the NDI tally state is received.
+     */
+    public void onTallyState(boolean onProgram, boolean onPreview) {
+        TextView chip = viewBinding.tallyChip;
+        if (onProgram) {
+            chip.setText(R.string.hud_tally_program);
+            chip.setBackgroundResource(R.drawable.bg_tally_program);
+            chip.setTextColor(getColor(R.color.white));
+        } else if (onPreview) {
+            chip.setText(R.string.hud_tally_preview);
+            chip.setBackgroundResource(R.drawable.bg_tally_preview);
+            chip.setTextColor(getColor(R.color.white));
+        } else {
+            chip.setText(R.string.hud_tally_idle);
+            chip.setBackgroundResource(R.drawable.bg_hud_chip);
+            chip.setTextColor(getColor(R.color.fw_text_secondary));
+        }
+    }
+
+    /**
+     * Called on the main thread once per display frame with linear peak levels (0..1).
+     */
+    public void onAudioLevels(float left, float right) {
+        if (hudShown) {
+            viewBinding.audioMeterView.setLevels(left, right);
+        }
     }
 
     private void initializeCloseButton() {

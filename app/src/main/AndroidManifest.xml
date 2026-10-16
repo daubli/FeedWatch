@@ -22,7 +22,7 @@
 				android:name="de.daubli.feedwatch.MainActivity"
 				android:exported="true"
 				android:launchMode="singleTop"
-				android:theme="@style/Theme.NdiFinder">
+				android:theme="@style/Theme.FeedWatch">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN"/>
 				<category android:name="android.intent.category.LAUNCHER"/>
@@ -38,18 +38,18 @@
 				android:name="de.daubli.feedwatch.StreamVideoActivity"
 				android:screenOrientation="landscape"
 				android:exported="true"
-				android:theme="@style/Theme.AppCompat.NoActionBar"
+				android:theme="@style/Theme.FeedWatch.Fullscreen"
 		>
 		</activity>
 		<activity
 				android:name="de.daubli.feedwatch.SettingsActivity"
 				android:exported="true"
-				android:theme="@style/Theme.AppCompat.Light"
+				android:theme="@style/Theme.FeedWatch"
 		/>
 		<activity
 				android:name="de.daubli.feedwatch.AboutActivity"
 				android:exported="true"
-				android:theme="@style/Theme.NdiFinder"
+				android:theme="@style/Theme.FeedWatch"
 		/>
 	</application>
 </manifest>

@@ -1,10 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#373737</color>
-    <color name="purple_500">#242424</color>
-    <color name="purple_700">#313131</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- Surfaces: near-black, like a field monitor bezel -->
+    <color name="fw_background">#FF0B0C0E</color>
+    <color name="fw_surface">#FF16181C</color>
+    <color name="fw_surface_raised">#FF1F2228</color>
+    <color name="fw_outline">#FF2C3038</color>
+
+    <!-- Text -->
+    <color name="fw_text_primary">#FFF2F3F5</color>
+    <color name="fw_text_secondary">#FF9AA0AA</color>
+    <color name="fw_text_disabled">#FF5C626C</color>
+
+    <!-- Accent (active tools, focus, controls) -->
+    <color name="fw_accent">#FFF5A623</color>
+    <color name="fw_accent_dim">#33F5A623</color>
+    <color name="fw_on_accent">#FF111111</color>
+
+    <!-- Tally and source badges -->
+    <color name="fw_tally_program">#FFE5302A</color>
+    <color name="fw_tally_preview">#FF2DBE4E</color>
+    <color name="fw_badge_ndi">#FF2F7FE0</color>
+    <color name="fw_badge_usb">#FF8A5CF0</color>
+
+    <!-- Stream HUD -->
+    <color name="fw_hud_scrim">#B3000000</color>
+    <color name="fw_hud_chip">#26FFFFFF</color>
+    <color name="fw_hud_pressed">#33FFFFFF</color>
+
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

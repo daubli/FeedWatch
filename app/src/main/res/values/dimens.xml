@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="fw_screen_padding">16dp</dimen>
+    <dimen name="fw_card_radius">12dp</dimen>
+    <dimen name="fw_hud_bar_height">44dp</dimen>
+</resources>

@@ -4,4 +4,39 @@
     <string name="menu_about">About</string>
     <string name="ndi_license">This application uses the NDI® SDK. NDI® is a registered trademark of the Vizrt Group.
     </string>
+
+    <!-- Source list -->
+    <string name="sources_header">Sources</string>
+    <string name="sources_scanning">Scanning</string>
+    <string name="sources_empty_title">No sources found</string>
+    <string name="sources_empty_body">Make sure this device is on the same network as your NDI senders, or connect a UVC capture card.\nPull down to refresh.</string>
+    <string name="badge_ndi">NDI</string>
+    <string name="badge_usb">USB</string>
+    <string name="source_usb_subtitle">UVC capture device</string>
+    <string name="source_unavailable">Source unavailable. Please refresh.</string>
+    <string name="usb_permission_denied">USB permission denied.</string>
+
+    <!-- Settings -->
+    <string name="settings_section_network">Network</string>
+    <string name="settings_additional_sources">Additional NDI sources</string>
+    <string name="settings_additional_sources_helper">Comma-separated IP addresses, for senders outside mDNS discovery</string>
+    <string name="settings_section_stream">Stream</string>
+    <string name="settings_low_bandwidth">Low bandwidth mode</string>
+    <string name="settings_low_bandwidth_summary">Receive the lower-quality NDI proxy stream to save bandwidth and battery</string>
+    <string name="settings_save">Save</string>
+    <string name="about_version">Version %1$s</string>
+
+    <!-- Stream HUD -->
+    <string name="hud_close">Close stream</string>
+    <string name="hud_low_bandwidth">LOW BW</string>
+    <string name="hud_tally_program">PGM</string>
+    <string name="hud_tally_preview">PVW</string>
+    <string name="hud_tally_idle">TALLY</string>
+    <string name="hud_waiting">NO SIGNAL</string>
+    <string name="tool_grid">GRID</string>
+    <string name="tool_zebra">ZEBRA</string>
+    <string name="tool_peaking">PEAK</string>
+    <string name="tool_tally">TALLY</string>
+    <string name="audio_left">L</string>
+    <string name="audio_right">R</string>
 </resources>

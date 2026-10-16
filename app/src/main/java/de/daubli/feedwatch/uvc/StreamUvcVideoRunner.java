@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.View;
 import de.daubli.feedwatch.StreamVideoActivity;
 import de.daubli.feedwatch.StreamVideoRunner;
@@ -39,6 +40,12 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
     private final FramingHelperOverlayView framingHelperOverlayView;
 
     private volatile boolean running = true;
+
+    private long frameRateWindowStart;
+
+    private int frameRateWindowCount;
+
+    private float measuredFrameRate;
 
     private static final class Frame {
 
@@ -114,11 +121,29 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
                 // Push to GL thread via OpenGLVideoView queueEvent()
                 openGLVideoView.updateFrame(f.rgba, f.width, f.height, FourCCType.RGBA);
                 framingHelperOverlayView.setFramingRect(openGLVideoView.getVideoRect());
+                activity.onVideoFormat(f.width, f.height, measureFrameRate(), "MJPEG");
             }
 
             openGLVideoView.postOnAnimation(this);
         }
     };
+
+    // UVC frames carry no frame rate, so count rendered frames per second
+    private float measureFrameRate() {
+        long now = SystemClock.uptimeMillis();
+        if (frameRateWindowStart == 0) {
+            frameRateWindowStart = now;
+        }
+        frameRateWindowCount++;
+
+        long elapsed = now - frameRateWindowStart;
+        if (elapsed >= 1000) {
+            measuredFrameRate = Math.round(frameRateWindowCount * 1000f / elapsed);
+            frameRateWindowStart = now;
+            frameRateWindowCount = 0;
+        }
+        return measuredFrameRate;
+    }
 
     private static ByteBuffer bitmapToRgbaBuffer(Bitmap bmp) {
         Bitmap argb = bmp.getConfig() == Bitmap.Config.ARGB_8888 ? bmp : bmp.copy(Bitmap.Config.ARGB_8888, false);

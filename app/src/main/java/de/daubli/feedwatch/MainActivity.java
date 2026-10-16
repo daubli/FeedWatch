@@ -6,7 +6,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import com.google.android.material.snackbar.Snackbar;
 
@@ -22,18 +21,21 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 import androidx.annotation.MainThread;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.appbar.MaterialToolbar;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import de.daubli.feedwatch.ndi.Ndi;
 import de.daubli.feedwatch.ndi.NdiDiscoveryManager;
 import de.daubli.feedwatch.ndi.NdiFinder;
 import de.daubli.feedwatch.ndi.NdiSource;
 import de.daubli.feedwatch.settings.SettingsStore;
+import de.daubli.feedwatch.sources.SourceListAdapter;
 import de.daubli.feedwatch.sources.VideoSource;
 import de.daubli.feedwatch.usb.UsbDevicePermissionHandler;
 import de.daubli.feedwatch.uvc.UVCSource;
@@ -53,15 +55,17 @@ public class MainActivity extends AppCompatActivity {
 
     private ListView sourceListView;
 
-    private TextView refreshHint;
+    private View emptyState;
+
+    private TextView sourceCount;
+
+    private View scanIndicator;
 
     private SwipeRefreshLayout swipeRefreshLayout;
 
     private final List<VideoSource> currentSources = new ArrayList<>();
 
-    private final List<String> currentSourceNames = new ArrayList<>();
-
-    private ArrayAdapter<String> adapter;
+    private SourceListAdapter adapter;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -78,8 +82,13 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+
         sourceListView = findViewById(R.id.sourceListView);
-        refreshHint = findViewById(R.id.refreshHint);
+        emptyState = findViewById(R.id.emptyState);
+        sourceCount = findViewById(R.id.sourceCount);
+        scanIndicator = findViewById(R.id.scanIndicator);
         swipeRefreshLayout = findViewById(R.id.swipeToRefresh);
 
         Ndi.initialize();
@@ -90,12 +99,13 @@ public class MainActivity extends AppCompatActivity {
         finder = new NdiFinder(false, null, settingsStore.getAdditionalSources());
         uvcSourceFinder = new UVCSourceFinder(this);
 
-        adapter = new ArrayAdapter<>(this, R.layout.support_simple_spinner_dropdown_item, currentSourceNames);
+        adapter = new SourceListAdapter(this, currentSources);
         sourceListView.setAdapter(adapter);
 
         sourceListView.setOnItemClickListener(this::onSourceClicked);
 
-        swipeRefreshLayout.setColorSchemeResources(R.color.cardview_shadow_end_color);
+        swipeRefreshLayout.setColorSchemeResources(R.color.fw_accent);
+        swipeRefreshLayout.setProgressBackgroundColorSchemeResource(R.color.fw_surface_raised);
         swipeRefreshLayout.setOnRefreshListener(this::triggerManualRefresh);
 
         handleUsbIntent(getIntent());
@@ -179,6 +189,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        startScanIndicator();
+
         scanExecutor = Executors.newSingleThreadExecutor();
         scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -189,6 +201,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopBackgroundScanning() {
         ndiDiscoveryManager.stopDiscovery();
+        scanIndicator.clearAnimation();
 
         if (scheduler != null) {
             scheduler.shutdownNow();
@@ -198,6 +211,14 @@ public class MainActivity extends AppCompatActivity {
             scanExecutor.shutdownNow();
             scanExecutor = null;
         }
+    }
+
+    private void startScanIndicator() {
+        Animation pulse = new AlphaAnimation(1f, 0.2f);
+        pulse.setDuration(800);
+        pulse.setRepeatMode(Animation.REVERSE);
+        pulse.setRepeatCount(Animation.INFINITE);
+        scanIndicator.startAnimation(pulse);
     }
 
     private void triggerManualRefresh() {
@@ -278,12 +299,10 @@ public class MainActivity extends AppCompatActivity {
         currentSources.clear();
         currentSources.addAll(nextList);
 
-        currentSourceNames.clear();
-        currentSourceNames.addAll(currentSources.stream().map(VideoSource::getSourceName).collect(Collectors.toList()));
-
         adapter.notifyDataSetChanged();
 
-        refreshHint.setVisibility(currentSourceNames.isEmpty() ? View.VISIBLE : View.GONE);
+        sourceCount.setText(String.valueOf(currentSources.size()));
+        emptyState.setVisibility(currentSources.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
     private void onSourceClicked(AdapterView<?> parent, View view, int position, long id) {
@@ -300,7 +319,7 @@ public class MainActivity extends AppCompatActivity {
                 selectVideoSource(resolved);
                 beginStreaming();
             } catch (IllegalArgumentException ex) {
-                Snackbar.make(sourceListView, "Source unavailable. Please refresh.", Snackbar.LENGTH_LONG).show();
+                Snackbar.make(sourceListView, R.string.source_unavailable, Snackbar.LENGTH_LONG).show();
             }
             return;
         }
@@ -319,7 +338,7 @@ public class MainActivity extends AppCompatActivity {
 
                     @Override
                     public void onPermissionDenied(UsbDevice device) {
-                        Snackbar.make(sourceListView, "USB permission denied.", Snackbar.LENGTH_LONG).show();
+                        Snackbar.make(sourceListView, R.string.usb_permission_denied, Snackbar.LENGTH_LONG).show();
                     }
                 });
     }
@@ -340,17 +359,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menu_settings, menu);
-        inflater.inflate(R.menu.menu_about, menu);
+        inflater.inflate(R.menu.menu_main, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if ("Settings".contentEquals(item.getTitle())) {
+        if (item.getItemId() == R.id.menu_settings) {
             startActivity(new Intent(MainActivity.this, SettingsActivity.class));
             return true;
-        } else if ("About".contentEquals(item.getTitle())) {
+        } else if (item.getItemId() == R.id.menu_about) {
             startActivity(new Intent(MainActivity.this, AboutActivity.class));
             return true;
         }

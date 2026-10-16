@@ -1,28 +1,130 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-												   xmlns:app="http://schemas.android.com/apk/res-auto"
-												   xmlns:tools="http://schemas.android.com/tools"
-												   android:layout_width="match_parent"
-												   android:layout_height="match_parent"
-												   tools:context=".MainActivity">
-	<TextView
-			android:text="Swipe to refresh"
-			android:layout_width="match_parent"
-			android:layout_height="wrap_content"
-			android:paddingTop="16dp"
-			android:id="@+id/refreshHint" tools:ignore="MissingConstraints" android:textAlignment="center"
-	/>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              xmlns:tools="http://schemas.android.com/tools"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:background="@color/fw_background"
+              tools:context=".MainActivity">
 
-	<androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-			android:id="@+id/swipeToRefresh"
-			android:layout_width="match_parent"
-			android:layout_height="match_parent" tools:ignore="MissingConstraints"
-			app:layout_constraintTop_toTopOf="parent">
-		>
-		<ListView
-				android:layout_width="match_parent"
-				android:layout_height="match_parent"
-				android:id="@+id/sourceListView">
-		</ListView>
-	</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:theme="@style/ThemeOverlay.FeedWatch.Toolbar"
+            app:popupTheme="@style/ThemeOverlay.FeedWatch.Popup"
+            app:title="@string/app_name"/>
+
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/fw_screen_padding"
+            android:paddingEnd="@dimen/fw_screen_padding">
+
+        <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/sources_header"
+                android:textAllCaps="true"
+                android:textAppearance="@style/TextAppearance.FeedWatch.SectionLabel"/>
+
+        <TextView
+                android:id="@+id/sourceCount"
+                android:layout_width="wrap_content"
+                android:layout_height="20dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_hud_chip"
+                android:gravity="center"
+                android:minWidth="20dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:text="0"
+                android:textAppearance="@style/TextAppearance.FeedWatch.Badge"
+                tools:ignore="HardcodedText"/>
+
+        <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"/>
+
+        <View
+                android:id="@+id/scanIndicator"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/dot_live"/>
+
+        <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/sources_scanning"
+                android:textColor="@color/fw_text_secondary"
+                android:textSize="12sp"/>
+    </LinearLayout>
+
+    <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+                android:id="@+id/swipeToRefresh"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+            <ListView
+                    android:id="@+id/sourceListView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:divider="@android:color/transparent"
+                    android:dividerHeight="8dp"
+                    android:listSelector="@android:color/transparent"
+                    android:paddingStart="@dimen/fw_screen_padding"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="@dimen/fw_screen_padding"
+                    android:paddingBottom="@dimen/fw_screen_padding"
+                    android:scrollbarStyle="outsideOverlay"/>
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+        <!-- Not clickable, so pull-to-refresh still reaches the SwipeRefreshLayout below -->
+        <LinearLayout
+                android:id="@+id/emptyState"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="32dp">
+
+            <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_monitor"
+                    app:tint="@color/fw_text_disabled"/>
+
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/sources_empty_title"
+                    android:textColor="@color/fw_text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold"/>
+
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:lineSpacingMultiplier="1.2"
+                    android:maxWidth="320dp"
+                    android:text="@string/sources_empty_body"
+                    android:textColor="@color/fw_text_secondary"
+                    android:textSize="14sp"/>
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>

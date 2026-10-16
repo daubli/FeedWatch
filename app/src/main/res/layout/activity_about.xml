@@ -1,37 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        xmlns:tools="http://schemas.android.com/tools"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:padding="0dp"
-        tools:context=".AboutActivity"
-        android:background="@android:color/white">
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              xmlns:tools="http://schemas.android.com/tools"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="@color/fw_background"
+              android:orientation="vertical"
+              tools:context=".AboutActivity">
 
-    <android.widget.Toolbar
+    <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="?attr/colorPrimary"
-            android:title="@string/menu_about"
-            android:titleTextColor="@android:color/white"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:elevation="4dp"/>
+            android:layout_height="?attr/actionBarSize"
+            android:theme="@style/ThemeOverlay.FeedWatch.Toolbar"
+            app:navigationContentDescription="@string/abc_action_bar_up_description"
+            app:navigationIcon="@drawable/ic_arrow_back"
+            app:title="@string/menu_about"/>
 
-    <TextView
-            android:id="@+id/ndiNotice"
-            android:layout_width="0dp"
+    <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/ndi_license"
-            android:paddingTop="20dp"
-            android:textAlignment="center"
-            android:textColor="@android:color/black"
-            android:textSize="14sp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/toolbar"
-    />
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="32dp">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <ImageView
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:importantForAccessibility="no"
+                android:src="@mipmap/ic_launcher_round"/>
+
+        <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/app_name"
+                android:textColor="@color/fw_text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold"/>
+
+        <TextView
+                android:id="@+id/versionText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/fw_text_secondary"
+                android:textSize="14sp"
+                tools:text="Version 1.1"/>
+
+        <TextView
+                android:id="@+id/ndiNotice"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:background="@drawable/bg_settings_card"
+                android:gravity="center"
+                android:lineSpacingMultiplier="1.2"
+                android:padding="16dp"
+                android:text="@string/ndi_license"
+                android:textColor="@color/fw_text_secondary"
+                android:textSize="14sp"/>
+    </LinearLayout>
+</LinearLayout>

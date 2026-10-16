@@ -91,6 +91,11 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private NdiVideoFrame captureFrame;
 
+    // Peak levels since the last display frame, for the HUD audio meters
+    private volatile float audioPeakLeft;
+
+    private volatile float audioPeakRight;
+
     // Ensure we fail only once and don't spam UI/logs
     private final AtomicBoolean renderFailed = new AtomicBoolean(false);
 
@@ -190,6 +195,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         audioThread = new Thread(() -> {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
             NdiAudioFrame audioFrame = new NdiAudioFrame();
+            float[] peaks = new float[2];
             ByteBuffer pcm = null;
 
             AudioTrack track = null;
@@ -238,7 +244,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                     if (pcm == null || pcm.capacity() < bytes) {
                         pcm = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder());
                     }
-                    int size = audioFrame.toStereoPcm16(pcm, null);
+                    int size = audioFrame.toStereoPcm16(pcm, peaks);
                     audioFrame.freeBuffer();
                     if (size <= 0) {
                         continue;
@@ -246,6 +252,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                     pcm.clear();
                     pcm.limit(size);
 
+                    audioPeakLeft = Math.max(audioPeakLeft, peaks[0]);
+                    audioPeakRight = Math.max(audioPeakRight, peaks[1]);
 
                     long prefillFrames = (long) trackSampleRate * AUDIO_PREFILL_MS / 1000;
                     if (playing) {
@@ -352,6 +360,10 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 return;
             }
 
+            activity.onAudioLevels(audioPeakLeft, audioPeakRight);
+            audioPeakLeft = 0f;
+            audioPeakRight = 0f;
+
             final NdiVideoFrame frame = renderFrame.getAndSet(null);
             if (frame != null) {
                 if (firstFramePending) {
@@ -367,9 +379,15 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                         return;
                     }
 
-                    videoView.updateFrame(frame.getData(), frame.getXResolution(), frame.getYResolution(),
-                            frame.getFourCCType(), () -> recycleFrame(frame));
+                    // read everything up front, the frame may be recycled as soon as it is handed to GL
+                    int width = frame.getXResolution();
+                    int height = frame.getYResolution();
+                    FourCCType fourCCType = frame.getFourCCType();
+                    float frameRate = frameRate(frame);
+
+                    videoView.updateFrame(frame.getData(), width, height, fourCCType, () -> recycleFrame(frame));
                     framingHelperOverlayView.setFramingRect(videoView.getVideoRect());
+                    activity.onVideoFormat(width, height, frameRate, fourCCType.name());
 
                 } catch (UnsupportedOperationException e) {
                     recycleFrame(frame);
@@ -392,6 +410,11 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             }
         }
     };
+
+    private static float frameRate(NdiVideoFrame frame) {
+        int d = frame.getFrameRateD();
+        return d > 0 ? (float) frame.getFrameRateN() / d : 0f;
+    }
 
     private boolean isFrameRenderable(NdiVideoFrame frame) {
         int w = frame.getXResolution();
@@ -420,6 +443,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                             mainHandler.post(() -> {
                                 tallyOverlayView.updateTally(tally.onProgram, tally.onPreview);
                                 tallyOverlayView.setVideoRect(videoView.getVideoRect());
+                                activity.onTallyState(tally.onProgram, tally.onPreview);
                             });
                         }
                     }

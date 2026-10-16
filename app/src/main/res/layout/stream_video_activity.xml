@@ -1,96 +1,171 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-			 xmlns:tools="http://schemas.android.com/tools"
-			 android:layout_width="match_parent"
-			 android:layout_height="match_parent"
-			 tools:context=".StreamVideoActivity">
+             xmlns:app="http://schemas.android.com/apk/res-auto"
+             xmlns:tools="http://schemas.android.com/tools"
+             android:layout_width="match_parent"
+             android:layout_height="match_parent"
+             android:background="@color/black"
+             tools:context=".StreamVideoActivity">
 
-	<de.daubli.feedwatch.view.base.OpenGLVideoView
-			android:id="@+id/openGLVideoView"
-			android:layout_width="match_parent"
-			android:layout_height="match_parent"
-			android:visibility="invisible"/>
+    <de.daubli.feedwatch.view.base.OpenGLVideoView
+            android:id="@+id/openGLVideoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="invisible"/>
 
-	<de.daubli.feedwatch.view.overlays.framehelper.FramingHelperOverlayView
-			android:id="@+id/framingHelperOverlayView"
-			android:layout_width="match_parent"
-			android:layout_height="match_parent"
-			android:visibility="invisible"/>
+    <de.daubli.feedwatch.view.overlays.framehelper.FramingHelperOverlayView
+            android:id="@+id/framingHelperOverlayView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"/>
 
-	<de.daubli.feedwatch.view.overlays.tally.TallyOverlayView
-			android:id="@+id/tallyOverlayView"
-			android:layout_width="match_parent"
-			android:layout_height="match_parent"
-			android:visibility="gone"
-	/>
+    <de.daubli.feedwatch.view.overlays.tally.TallyOverlayView
+            android:id="@+id/tallyOverlayView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"/>
 
-	<!-- Horizontal layout for the buttons -->
-	<LinearLayout
-			android:id="@+id/menu_layout"
-			android:layout_width="match_parent"
-			android:layout_height="wrap_content"
-			android:layout_gravity="bottom"
-			android:orientation="horizontal"
-			android:layout_marginEnd="16dp"
-			android:visibility="gone"
-			android:background="#80000000"
-	>
+    <!-- Monitor HUD. The container is not clickable, so taps outside the bars reach the video view. -->
+    <FrameLayout
+            android:id="@+id/hudLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            tools:visibility="visible">
 
-		<Space
-				android:layout_width="0dp"
-				android:layout_height="45dp" android:layout_weight="1"
-		/>
+        <!-- Top status bar: source and signal info -->
+        <LinearLayout
+                android:id="@+id/topBar"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_gravity="top"
+                android:background="@drawable/bg_hud_top"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="8dp">
 
-		<ImageButton
-				android:id="@+id/tally_button"
-				android:layout_width="36dp"
-				android:layout_height="36dp"
-				android:layout_marginTop="4dp"
-				android:src="@drawable/tally"
-				android:background="@android:color/transparent"
-				android:layout_marginEnd="10dp"
-				android:scaleType="fitXY"
-		/>
+            <ImageButton
+                    android:id="@+id/closeButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/hud_close"
+                    android:src="@drawable/ic_close"
+                    app:tint="@color/fw_text_primary"/>
 
-		<ImageButton
-				android:id="@+id/zebra_button"
-				android:layout_width="36dp"
-				android:layout_height="36dp"
-				android:layout_marginTop="4dp"
-				android:src="@drawable/zebra"
-				android:background="@android:color/transparent"
-				android:layout_marginEnd="10dp"
-				android:scaleType="fitXY"
-		/>
+            <TextView
+                    android:id="@+id/sourceTypeBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="22dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_badge_ndi"
+                    android:gravity="center"
+                    android:paddingStart="7dp"
+                    android:paddingEnd="7dp"
+                    android:text="@string/badge_ndi"
+                    android:textAppearance="@style/TextAppearance.FeedWatch.Badge"/>
 
-		<ImageButton
-				android:id="@+id/focus_assist_button"
-				android:layout_width="36dp"
-				android:layout_height="36dp"
-				android:layout_marginTop="4dp"
-				android:src="@drawable/focus_assist"
-				android:background="@android:color/transparent"
-				android:layout_marginEnd="10dp"
-				android:scaleType="fitXY"
-		/>
+            <TextView
+                    android:id="@+id/sourceNameText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:shadowColor="#99000000"
+                    android:shadowRadius="4"
+                    android:textColor="@color/fw_text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    tools:text="STUDIO-PC (Camera 1)"/>
 
-		<ImageButton
-				android:id="@+id/grid_button"
-				android:layout_width="36dp"
-				android:layout_height="36dp"
-				android:layout_marginTop="4dp"
-				android:src="@drawable/grid_icon_3x3"
-				android:background="@android:color/transparent"
-				android:layout_marginEnd="10dp"
-				android:scaleType="fitXY"
-		/>
+            <TextView
+                    android:id="@+id/lowBandwidthChip"
+                    style="@style/Widget.FeedWatch.HudChip"
+                    android:background="@drawable/bg_badge_accent"
+                    android:text="@string/hud_low_bandwidth"
+                    android:textColor="@color/fw_on_accent"
+                    android:visibility="gone"
+                    tools:visibility="visible"/>
 
-		<ImageButton
-				android:id="@+id/close_button"
-				android:layout_width="40dp"
-				android:layout_height="40dp"
-				android:src="@android:drawable/ic_menu_close_clear_cancel"
-				android:background="@android:color/transparent"/>
-	</LinearLayout>
+            <TextView
+                    android:id="@+id/tallyChip"
+                    style="@style/Widget.FeedWatch.HudChip"
+                    android:minWidth="48dp"
+                    android:text="@string/hud_tally_idle"
+                    android:textColor="@color/fw_text_secondary"/>
 
+            <TextView
+                    android:id="@+id/resolutionChip"
+                    style="@style/Widget.FeedWatch.HudChip"
+                    android:text="@string/hud_waiting"
+                    tools:text="1920×1080"/>
+
+            <TextView
+                    android:id="@+id/fpsChip"
+                    style="@style/Widget.FeedWatch.HudChip"
+                    android:visibility="gone"
+                    tools:text="50 fps"
+                    tools:visibility="visible"/>
+
+            <TextView
+                    android:id="@+id/formatChip"
+                    style="@style/Widget.FeedWatch.HudChip"
+                    android:visibility="gone"
+                    tools:text="UYVY"
+                    tools:visibility="visible"/>
+        </LinearLayout>
+
+        <!-- Bottom bar: monitoring tools and audio meters -->
+        <LinearLayout
+                android:id="@+id/bottomBar"
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:layout_gravity="bottom"
+                android:background="@drawable/bg_hud_bottom"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingTop="16dp"
+                android:paddingEnd="16dp">
+
+            <TextView
+                    android:id="@+id/gridButton"
+                    style="@style/Widget.FeedWatch.ToolButton"
+                    android:drawableTop="@drawable/ic_tool_grid"
+                    android:text="@string/tool_grid"/>
+
+            <TextView
+                    android:id="@+id/zebraButton"
+                    style="@style/Widget.FeedWatch.ToolButton"
+                    android:drawableTop="@drawable/ic_tool_zebra"
+                    android:text="@string/tool_zebra"/>
+
+            <TextView
+                    android:id="@+id/focusAssistButton"
+                    style="@style/Widget.FeedWatch.ToolButton"
+                    android:drawableTop="@drawable/ic_tool_peaking"
+                    android:text="@string/tool_peaking"/>
+
+            <TextView
+                    android:id="@+id/tallyButton"
+                    style="@style/Widget.FeedWatch.ToolButton"
+                    android:drawableTop="@drawable/ic_tool_tally"
+                    android:text="@string/tool_tally"/>
+
+            <Space
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"/>
+
+            <de.daubli.feedwatch.view.hud.AudioMeterView
+                    android:id="@+id/audioMeterView"
+                    android:layout_width="180dp"
+                    android:layout_height="30dp"/>
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>
