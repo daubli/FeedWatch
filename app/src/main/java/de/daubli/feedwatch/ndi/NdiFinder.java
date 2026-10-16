@@ -1,6 +1,7 @@
 package de.daubli.feedwatch.ndi;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -8,11 +9,14 @@ public class NdiFinder {
 
     private static final Logger LOG = Logger.getLogger(NdiFinder.class.getSimpleName());
 
+    // how long a recreated finder may take to find the sources again
+    private static final long REDISCOVERY_TIMEOUT_MS = 3000;
+
     private final boolean showLocalSources;
 
     private final String groups;
 
-    private final String extraIps;
+    private String extraIps;
 
     private long instancePointer;
 
@@ -27,6 +31,45 @@ public class NdiFinder {
 
     public void initNewFinderInstance() {
         this.instancePointer = findCreate(showLocalSources, groups, extraIps);
+    }
+
+    /**
+     * Searches the given additional IP addresses from now on. The native finder only takes them when it is created,
+     * so it is created again when they changed. Blocks until it found the known sources again, call it from the scan
+     * thread.
+     */
+    public synchronized void setExtraIps(String extraIps) {
+        if (Objects.equals(this.extraIps, extraIps)) {
+            return;
+        }
+        this.extraIps = extraIps;
+        LOG.info("Additional sources changed, searching " + extraIps);
+
+        // the queried sources stay, a source opened from the list is resolved from them until the next query
+        if (instancePointer != 0) {
+            findDestroy(instancePointer);
+        }
+        initNewFinderInstance();
+        awaitRediscovery();
+    }
+
+    /**
+     * Waits until the recreated finder found as many sources as were known before, so the source list does not
+     * empty for a moment. Gives up after a while, a source behind a removed address is not found again.
+     */
+    private void awaitRediscovery() {
+        int knownSources = previouslyQueriedSources != null ? previouslyQueriedSources.length : 0;
+        long deadline = System.currentTimeMillis() + REDISCOVERY_TIMEOUT_MS;
+
+        long remaining;
+        while (countCurrentSources() < knownSources && (remaining = deadline - System.currentTimeMillis()) > 0) {
+            findWaitForSources(instancePointer, (int) remaining);
+        }
+    }
+
+    private int countCurrentSources() {
+        String[] packed = findGetCurrentSources(instancePointer);
+        return packed != null ? packed.length / 2 : 0;
     }
 
     public synchronized void waitForSources(int timeout) {

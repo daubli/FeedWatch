@@ -281,6 +281,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void scanOnceAndPublish(boolean isManual) {
+        // picks up additional sources changed in the settings, without restarting the app
+        finder.setExtraIps(settingsStore.getAdditionalSources());
         finder.waitForSources(SCAN_TIMEOUT_MS);
 
         VideoSource[] ndiSources = finder.getCurrentSources();
