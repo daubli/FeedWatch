@@ -99,6 +99,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         initializeToggleFocusAssistButton();
         initializeToggleGridButton();
         initializeTallyButton();
+        initializeAudioButton();
         initializeCloseButton();
         initShowHideMenu();
     }
@@ -242,6 +243,33 @@ public class StreamVideoActivity extends AppCompatActivity {
         });
     }
 
+    private void initializeAudioButton() {
+        // audio is NDI-only
+        if (videoSource instanceof UVCSource) {
+            viewBinding.audioButton.setVisibility(View.GONE);
+            return;
+        }
+
+        showAudioEnabled(new SettingsStore().isAudioEnabled());
+        viewBinding.audioButton.setOnClickListener(view -> {
+            extendMenuTimeout();
+            SettingsStore settingsStore = new SettingsStore();
+
+            boolean enabled = !settingsStore.isAudioEnabled();
+            settingsStore.setAudioEnabled(enabled);
+            showAudioEnabled(enabled);
+            if (runner != null) {
+                runner.setAudioEnabled(enabled);
+            }
+        });
+    }
+
+    private void showAudioEnabled(boolean enabled) {
+        viewBinding.audioButton.setActivated(enabled);
+        // without audio there are no levels to show
+        viewBinding.audioMeterView.setVisibility(enabled ? View.VISIBLE : View.INVISIBLE);
+    }
+
     private void initHud() {
         boolean isUvc = videoSource instanceof UVCSource;
 
@@ -251,7 +279,9 @@ public class StreamVideoActivity extends AppCompatActivity {
 
         // tally and audio only exist for NDI sources
         viewBinding.tallyChip.setVisibility(isUvc ? View.GONE : View.VISIBLE);
-        viewBinding.audioMeterView.setVisibility(isUvc ? View.GONE : View.VISIBLE);
+        if (isUvc) {
+            viewBinding.audioMeterView.setVisibility(View.GONE);
+        }
         viewBinding.lowBandwidthChip.setVisibility(
                 !isUvc && new SettingsStore().isLowBandwidthModeEnabled() ? View.VISIBLE : View.GONE);
     }

@@ -157,6 +157,12 @@
                     android:drawableTop="@drawable/ic_tool_tally"
                     android:text="@string/tool_tally"/>
 
+            <TextView
+                    android:id="@+id/audioButton"
+                    style="@style/Widget.FeedWatch.ToolButton"
+                    android:drawableTop="@drawable/ic_tool_audio"
+                    android:text="@string/tool_audio"/>
+
             <Space
                     android:layout_width="0dp"
                     android:layout_height="0dp"

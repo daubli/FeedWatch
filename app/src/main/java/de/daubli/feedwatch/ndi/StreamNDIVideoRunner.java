@@ -118,7 +118,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                     return;
                 }
                 audioPlayer = new NdiAudioPlayer(frameSync);
-                setAudioEnabled(true);
+                // read now: the HUD button may have changed it while the stream was starting
+                setAudioEnabled(new SettingsStore().isAudioEnabled());
                 choreographer = Choreographer.getInstance();
                 choreographer.postFrameCallback(frameCallback);
             });
@@ -164,6 +165,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
      * Switches audio playback on or off. With audio on, video is held back until the matching audio is heard;
      * with audio off, every frame is shown as soon as possible. Must be called on the main thread.
      */
+    @Override
     public void setAudioEnabled(boolean enabled) {
         audioEnabled = enabled;
         if (audioPlayer == null) {

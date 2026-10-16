@@ -37,6 +37,7 @@
     <string name="tool_zebra">ZEBRA</string>
     <string name="tool_peaking">PEAK</string>
     <string name="tool_tally">TALLY</string>
+    <string name="tool_audio">AUDIO</string>
     <string name="audio_left">L</string>
     <string name="audio_right">R</string>
 </resources>
