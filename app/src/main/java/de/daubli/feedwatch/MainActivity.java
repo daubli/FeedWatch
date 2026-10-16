@@ -26,6 +26,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.ContextThemeWrapper;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -33,12 +35,12 @@ import android.view.View;
 import android.view.animation.LinearInterpolator;
 import android.widget.AdapterView;
 import android.widget.ListView;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -505,7 +507,8 @@ public class MainActivity extends AppCompatActivity {
         VideoSource source = currentSources.get(position);
         boolean isDefault = source.getStableKey().equals(settingsStore.getDefaultSourceKey());
 
-        PopupMenu menu = new PopupMenu(this, view);
+        PopupMenu menu = new PopupMenu(new ContextThemeWrapper(this, R.style.ThemeOverlay_FeedWatch_ContextMenu), view,
+                Gravity.END);
         menu.getMenu().add(isDefault ? R.string.default_source_clear : R.string.default_source_set);
         menu.setOnMenuItemClickListener(item -> {
             if (isDefault) {

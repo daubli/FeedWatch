@@ -5,6 +5,7 @@
     <color name="fw_surface">#FF16181C</color>
     <color name="fw_surface_raised">#FF1F2228</color>
     <color name="fw_outline">#FF2C3038</color>
+    <color name="fw_outline_strong">#FF4A505A</color>
 
     <!-- Text -->
     <color name="fw_text_primary">#FFF2F3F5</color>

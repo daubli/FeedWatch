@@ -57,6 +57,15 @@
         <item name="android:colorBackground">@color/fw_surface_raised</item>
     </style>
 
+    <!-- Context menu on a list row: outlined, so it reads as a menu above the cards -->
+    <style name="ThemeOverlay.FeedWatch.ContextMenu" parent="ThemeOverlay.FeedWatch.Popup">
+        <item name="popupMenuStyle">@style/Widget.FeedWatch.ContextMenu</item>
+    </style>
+
+    <style name="Widget.FeedWatch.ContextMenu" parent="Widget.MaterialComponents.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_popup_menu</item>
+    </style>
+
     <!-- Text -->
     <style name="TextAppearance.FeedWatch" parent="TextAppearance.AppCompat">
         <item name="android:fontFamily">@font/public_sans</item>
