@@ -3,6 +3,7 @@ package de.daubli.feedwatch.ndi;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -88,6 +89,10 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     private final ArrayBlockingQueue<NdiVideoFrame> freeFrames = new ArrayBlockingQueue<>(VIDEO_FRAME_POOL_SIZE);
 
     private volatile boolean videoFramesReleased = false;
+
+    // Released once per display frame. The frame sync always returns a frame immediately, so capture is paced to
+    // the display instead of spinning.
+    private final Semaphore captureRequest = new Semaphore(0);
 
     private NdiVideoFrame captureFrame;
 
@@ -321,20 +326,17 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             try {
                 while (running && !Thread.currentThread().isInterrupted()) {
                     try {
-                        if (frameSync == null) {
-                            Thread.sleep(2);
-                            continue;
-                        }
+                        captureRequest.acquire();
+                        // display frames missed while waiting for a free frame are not caught up
+                        captureRequest.drainPermits();
 
-                        if (frameSync.captureVideo(captureFrame)) {
+                        if (frameSync != null && frameSync.captureVideo(captureFrame)) {
                             NdiVideoFrame skipped = renderFrame.getAndSet(captureFrame);
                             if (skipped != null) {
                                 recycleFrame(skipped);
                             }
                             // blocks until the GL thread hands a frame back
                             captureFrame = freeFrames.take();
-                        } else {
-                            Thread.sleep(2);
                         }
                     } catch (InterruptedException ie) {
                         break;
@@ -406,6 +408,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
         private void reschedule() {
             if (choreographer != null && running) {
+                // the frame captured now is shown on the next display frame
+                captureRequest.release();
                 choreographer.postFrameCallback(this);
             }
         }
