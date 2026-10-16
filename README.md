@@ -103,6 +103,15 @@ buttons remain. It can be enabled in the Settings.
 
 ---
 
+### Waveform Monitor
+
+- Small waveform monitor over the picture, turned on with the **WFM** button
+- **Luma** or **RGB** waveform with the red, green and blue traces on top of each other: long-press the **WFM** button
+  to choose
+- Drag it with one finger to move it, pinch with two fingers to resize it, its place and size are remembered
+
+---
+
 ### Framing Guides
 
 - **Grid**: rule of thirds or a center cross

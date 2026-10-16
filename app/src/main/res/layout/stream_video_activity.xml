@@ -25,6 +25,13 @@
             android:layout_height="match_parent"
             android:visibility="gone"/>
 
+    <!-- Places itself, it can be dragged and pinched -->
+    <de.daubli.feedwatch.view.overlays.waveform.WaveformMonitorView
+            android:id="@+id/waveformMonitorView"
+            android:layout_width="260dp"
+            android:layout_height="156dp"
+            android:visibility="gone"/>
+
     <!-- Monitor HUD. The container is not clickable, so taps outside the bars reach the video view. -->
     <FrameLayout
             android:id="@+id/hudLayout"
@@ -150,6 +157,12 @@
                     style="@style/Widget.FeedWatch.ToolButton"
                     android:drawableTop="@drawable/ic_tool_peaking"
                     android:text="@string/tool_peaking"/>
+
+            <TextView
+                    android:id="@+id/waveformButton"
+                    style="@style/Widget.FeedWatch.ToolButton"
+                    android:drawableTop="@drawable/ic_tool_waveform"
+                    android:text="@string/tool_waveform"/>
 
             <TextView
                     android:id="@+id/tallyButton"

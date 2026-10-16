@@ -31,6 +31,7 @@ import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingGrid;
 import de.daubli.feedwatch.view.overlays.framehelper.GuideColor;
 import de.daubli.feedwatch.view.overlays.framehelper.SafeArea;
+import de.daubli.feedwatch.view.overlays.waveform.WaveformMode;
 
 public class StreamVideoActivity extends AppCompatActivity {
 
@@ -127,6 +128,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         initializeZebraButton();
         initializeToggleFocusAssistButton();
         initializeToggleGridButton();
+        initializeWaveformButton();
         initializeTallyButton();
         initializeAudioButton();
         initializeCloseButton();
@@ -138,6 +140,12 @@ public class StreamVideoActivity extends AppCompatActivity {
         viewBinding.openGLVideoView.setFocusPeakingColor(settingsStore.getFocusPeakingColor().getColor());
         viewBinding.openGLVideoView.setZebraThreshold(settingsStore.getZebraThreshold());
         applyFramingGuides(settingsStore);
+        viewBinding.waveformMonitorView.setMode(settingsStore.getWaveformMode());
+        viewBinding.waveformMonitorView.setPlacement(settingsStore.getWaveformX(), settingsStore.getWaveformY(),
+                settingsStore.getWaveformWidthDp());
+        if (settingsStore.isWaveformEnabled()) {
+            setWaveformEnabled(true);
+        }
         if (settingsStore.isFramingHelperOverlayEnabled()) {
             viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
             viewBinding.gridButton.setActivated(true);
@@ -161,7 +169,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         View[] views = {viewBinding.sourceTypeBadge, viewBinding.sourceNameText, viewBinding.lowBandwidthChip,
                 viewBinding.tallyChip, viewBinding.resolutionChip, viewBinding.fpsChip, viewBinding.formatChip,
                 viewBinding.gridButton, viewBinding.zebraButton, viewBinding.focusAssistButton,
-                viewBinding.tallyButton, viewBinding.audioMeterView};
+                viewBinding.waveformButton, viewBinding.tallyButton, viewBinding.audioMeterView};
         for (View view : views) {
             view.setVisibility(View.GONE);
         }
@@ -208,17 +216,21 @@ public class StreamVideoActivity extends AppCompatActivity {
         viewBinding.bottomBar.setOnClickListener(v -> extendMenuTimeout());
 
         // on the root rather than the video view, which stays invisible until the first frame arrives
-        viewBinding.getRoot().setOnClickListener(v -> {
-            // a tap next to an open tool settings popup only closes it
-            if (dismissToolSettings()) {
-                return;
-            }
-            if (hudShown) {
-                hideMenuNow();
-            } else {
-                showMenuAndScheduleHide();
-            }
-        });
+        viewBinding.getRoot().setOnClickListener(v -> onScreenTapped());
+        // the waveform monitor takes touches to be moved, a tap on it counts as a tap on the picture
+        viewBinding.waveformMonitorView.setOnClickListener(v -> onScreenTapped());
+    }
+
+    private void onScreenTapped() {
+        // a tap next to an open tool settings popup only closes it
+        if (dismissToolSettings()) {
+            return;
+        }
+        if (hudShown) {
+            hideMenuNow();
+        } else {
+            showMenuAndScheduleHide();
+        }
     }
 
     private void initializeZebraButton() {
@@ -253,6 +265,50 @@ public class StreamVideoActivity extends AppCompatActivity {
                             }
                         });
         showToolSettings(popup, viewBinding.zebraButton);
+    }
+
+    private void initializeWaveformButton() {
+        viewBinding.waveformButton.setOnClickListener(view -> {
+            extendMenuTimeout();
+            setWaveformEnabled(!new SettingsStore().isWaveformEnabled());
+        });
+        viewBinding.waveformButton.setOnLongClickListener(view -> {
+            showWaveformSettings();
+            return true;
+        });
+        viewBinding.waveformMonitorView.setOnPlacementChangedListener(
+                (x, y, widthDp) -> new SettingsStore().setWaveformPlacement(x, y, widthDp));
+    }
+
+    private void setWaveformEnabled(boolean enabled) {
+        viewBinding.waveformMonitorView.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        viewBinding.openGLVideoView.setWaveformListener(enabled ? viewBinding.waveformMonitorView : null);
+        viewBinding.waveformButton.setActivated(enabled);
+        new SettingsStore().setWaveformEnabled(enabled);
+    }
+
+    private void showWaveformSettings() {
+        SettingsStore settingsStore = new SettingsStore();
+        WaveformMode[] modes = WaveformMode.values();
+
+        List<ToolSettingsPopup.Choice> choices = new ArrayList<>();
+        for (WaveformMode mode : modes) {
+            choices.add(ToolSettingsPopup.Choice.text(getString(mode.getLabel())));
+        }
+
+        ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.waveform_settings_title))
+                .addChoices(getString(R.string.waveform_settings_mode), choices,
+                        settingsStore.getWaveformMode().ordinal(), index -> {
+                            settingsStore.setWaveformMode(modes[index]);
+                            viewBinding.waveformMonitorView.setMode(modes[index]);
+                            if (!settingsStore.isWaveformEnabled()) {
+                                setWaveformEnabled(true);
+                            } else {
+                                // redraws the waveform of a still picture in the new mode
+                                viewBinding.openGLVideoView.requestRender();
+                            }
+                        });
+        showToolSettings(popup, viewBinding.waveformButton);
     }
 
     private void initializeToggleFocusAssistButton() {

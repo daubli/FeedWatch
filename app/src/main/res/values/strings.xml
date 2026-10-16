@@ -53,6 +53,7 @@
     <string name="tool_grid">GRID</string>
     <string name="tool_zebra">ZEBRA</string>
     <string name="tool_peaking">PEAK</string>
+    <string name="tool_waveform">WFM</string>
     <string name="tool_tally">TALLY</string>
     <string name="tool_audio">AUDIO</string>
     <string name="audio_left">L</string>
@@ -61,6 +62,10 @@
     <string name="zebra_settings_title">Zebra</string>
     <string name="zebra_settings_threshold">Threshold</string>
     <string name="percent_value">%1$d%%</string>
+    <string name="waveform_settings_title">Waveform</string>
+    <string name="waveform_settings_mode">Mode</string>
+    <string name="waveform_mode_luma">Luma</string>
+    <string name="waveform_mode_rgb">RGB</string>
     <string name="framing_settings_title">Framing</string>
     <string name="framing_settings_grid">Grid</string>
     <string name="framing_settings_frame_lines">Frame lines</string>

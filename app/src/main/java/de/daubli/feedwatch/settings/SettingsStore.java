@@ -14,6 +14,8 @@ import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingGrid;
 import de.daubli.feedwatch.view.overlays.framehelper.GuideColor;
 import de.daubli.feedwatch.view.overlays.framehelper.SafeArea;
+import de.daubli.feedwatch.view.overlays.waveform.WaveformMode;
+import de.daubli.feedwatch.view.overlays.waveform.WaveformMonitorView;
 import de.daubli.feedwatch.view.overlays.zebra.ZebraOverlay;
 import androidx.annotation.Nullable;
 
@@ -40,6 +42,16 @@ public class SettingsStore {
     private static final String ZEBRA_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.zebra.enabled";
 
     private static final String ZEBRA_THRESHOLD_KEY = "de.daubli.feedwatch.view.overlays.zebra.threshold";
+
+    private static final String WAVEFORM_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.waveform.enabled";
+
+    private static final String WAVEFORM_MODE_KEY = "de.daubli.feedwatch.view.overlays.waveform.mode";
+
+    private static final String WAVEFORM_X_KEY = "de.daubli.feedwatch.view.overlays.waveform.x";
+
+    private static final String WAVEFORM_Y_KEY = "de.daubli.feedwatch.view.overlays.waveform.y";
+
+    private static final String WAVEFORM_WIDTH_KEY = "de.daubli.feedwatch.view.overlays.waveform.width";
 
     private static final String TALLY_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.tally.enabled";
 
@@ -225,6 +237,53 @@ public class SettingsStore {
     public void setZebraThreshold(int percent) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt(ZEBRA_THRESHOLD_KEY, percent);
+        editor.apply();
+    }
+
+    public boolean isWaveformEnabled() {
+        return sharedPreferences.getBoolean(WAVEFORM_ENABLED_KEY, false);
+    }
+
+    public void setWaveformEnabled(boolean enabled) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(WAVEFORM_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * What the waveform monitor plots, luma by default.
+     */
+    public WaveformMode getWaveformMode() {
+        return getEnum(WAVEFORM_MODE_KEY, WaveformMode.class, WaveformMode.LUMA);
+    }
+
+    public void setWaveformMode(WaveformMode mode) {
+        putEnum(WAVEFORM_MODE_KEY, mode);
+    }
+
+    /**
+     * Horizontal place of the waveform monitor in the free space of the screen, 0 is the left edge.
+     */
+    public float getWaveformX() {
+        return sharedPreferences.getFloat(WAVEFORM_X_KEY, WaveformMonitorView.DEFAULT_X_FRACTION);
+    }
+
+    /**
+     * Vertical place of the waveform monitor in the free space of the screen, 0 is the top edge.
+     */
+    public float getWaveformY() {
+        return sharedPreferences.getFloat(WAVEFORM_Y_KEY, WaveformMonitorView.DEFAULT_Y_FRACTION);
+    }
+
+    public float getWaveformWidthDp() {
+        return sharedPreferences.getFloat(WAVEFORM_WIDTH_KEY, WaveformMonitorView.DEFAULT_WIDTH_DP);
+    }
+
+    public void setWaveformPlacement(float x, float y, float widthDp) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putFloat(WAVEFORM_X_KEY, x);
+        editor.putFloat(WAVEFORM_Y_KEY, y);
+        editor.putFloat(WAVEFORM_WIDTH_KEY, widthDp);
         editor.apply();
     }
 
