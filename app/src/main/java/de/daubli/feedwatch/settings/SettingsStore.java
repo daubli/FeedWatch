@@ -10,6 +10,10 @@ import org.apache.commons.lang3.StringUtils;
 import android.content.Context;
 import android.content.SharedPreferences;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
+import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
+import de.daubli.feedwatch.view.overlays.framehelper.FramingGrid;
+import de.daubli.feedwatch.view.overlays.framehelper.GuideColor;
+import de.daubli.feedwatch.view.overlays.framehelper.SafeArea;
 import de.daubli.feedwatch.view.overlays.zebra.ZebraOverlay;
 import androidx.annotation.Nullable;
 
@@ -20,6 +24,14 @@ public class SettingsStore {
     private static final String ADDITIONAL_SOURCES_KEY = "de.daubli.feedwatch.additionalsources";
 
     private static final String FRAMING_HELPER_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.enabled";
+
+    private static final String FRAMING_GRID_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.grid";
+
+    private static final String FRAME_LINES_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.frame-lines";
+
+    private static final String SAFE_AREA_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.safe-area";
+
+    private static final String GUIDE_COLOR_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.color";
 
     private static final String FOCUS_ASSIST_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.focusassist.enabled";
 
@@ -100,6 +112,59 @@ public class SettingsStore {
     public void setFramingHelperOverlayEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(FRAMING_HELPER_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * Composition grid of the framing helper, the rule of thirds by default.
+     */
+    public FramingGrid getFramingGrid() {
+        return getEnum(FRAMING_GRID_KEY, FramingGrid.class, FramingGrid.THIRDS);
+    }
+
+    public void setFramingGrid(FramingGrid grid) {
+        putEnum(FRAMING_GRID_KEY, grid);
+    }
+
+    public FrameLines getFrameLines() {
+        return getEnum(FRAME_LINES_KEY, FrameLines.class, FrameLines.NONE);
+    }
+
+    public void setFrameLines(FrameLines frameLines) {
+        putEnum(FRAME_LINES_KEY, frameLines);
+    }
+
+    public SafeArea getSafeArea() {
+        return getEnum(SAFE_AREA_KEY, SafeArea.class, SafeArea.NONE);
+    }
+
+    public void setSafeArea(SafeArea safeArea) {
+        putEnum(SAFE_AREA_KEY, safeArea);
+    }
+
+    public GuideColor getGuideColor() {
+        return getEnum(GUIDE_COLOR_KEY, GuideColor.class, GuideColor.WHITE);
+    }
+
+    public void setGuideColor(GuideColor color) {
+        putEnum(GUIDE_COLOR_KEY, color);
+    }
+
+    private <E extends Enum<E>> E getEnum(String key, Class<E> type, E defaultValue) {
+        String name = sharedPreferences.getString(key, null);
+        if (name != null) {
+            try {
+                return Enum.valueOf(type, name);
+            } catch (IllegalArgumentException e) {
+                // a value from a newer version, fall back to the default
+            }
+        }
+        return defaultValue;
+    }
+
+    private void putEnum(String key, Enum<?> value) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(key, value.name());
         editor.apply();
     }
 

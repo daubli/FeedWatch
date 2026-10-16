@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rule of thirds grid -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="24dp"
+        android:height="24dp"
+        android:viewportWidth="24"
+        android:viewportHeight="24">
+    <path
+            android:pathData="M2,6.4h20v11.2h-20z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.5"/>
+    <path
+            android:pathData="M8.67,6.4V17.6M15.33,6.4V17.6M2,10.13H22M2,13.87H22"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1"/>
+</vector>

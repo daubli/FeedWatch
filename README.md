@@ -103,9 +103,13 @@ buttons remain. It can be enabled in the Settings.
 
 ---
 
-### Grid Overlay
+### Framing Guides
 
-- **3×3 composition grid** for framing assistance
+- **Grid**: rule of thirds or a center cross
+- **Frame lines** for **2.39:1**, **4:3** or **9:16**, the picture outside of them is darkened
+- **Title safe area** at **90%**
+- Guides in **white**, **yellow** or **red**
+- Long-press the **GRID** button to choose them, a tap turns all guides on or off
 
 ![3×3 Grid Example](img/grid.jpeg)
 

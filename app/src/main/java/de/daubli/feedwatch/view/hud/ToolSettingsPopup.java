@@ -9,10 +9,12 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 import androidx.annotation.ColorInt;
+import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 import com.google.android.material.slider.Slider;
 import de.daubli.feedwatch.R;
@@ -28,23 +30,42 @@ import de.daubli.feedwatch.R;
 public class ToolSettingsPopup {
 
     /**
-     * One choice of a section, optionally shown with a color dot.
+     * One choice of a section. With an icon or a color it is shown as a tile, the icon or a color dot above the
+     * label, otherwise as a text button.
      */
     public static final class Choice {
 
         final CharSequence label;
 
+        @DrawableRes
+        final int icon;
+
         @Nullable
         @ColorInt
         final Integer swatchColor;
 
-        public Choice(CharSequence label) {
-            this(label, null);
+        // factories instead of constructors: an icon and a color are both ints and would be easy to mix up
+
+        public static Choice text(CharSequence label) {
+            return new Choice(label, 0, null);
         }
 
-        public Choice(CharSequence label, @Nullable @ColorInt Integer swatchColor) {
+        public static Choice withIcon(CharSequence label, @DrawableRes int icon) {
+            return new Choice(label, icon, null);
+        }
+
+        public static Choice withColor(CharSequence label, @ColorInt int color) {
+            return new Choice(label, 0, color);
+        }
+
+        private Choice(CharSequence label, @DrawableRes int icon, @Nullable @ColorInt Integer swatchColor) {
             this.label = label;
+            this.icon = icon;
             this.swatchColor = swatchColor;
+        }
+
+        boolean isTile() {
+            return icon != 0 || swatchColor != null;
         }
     }
 
@@ -71,6 +92,13 @@ public class ToolSettingsPopup {
 
     private final PopupWindow window;
 
+    private int columns = 1;
+
+    @Nullable
+    private ViewGroup[] columnViews;
+
+    private int sectionCount;
+
     public ToolSettingsPopup(Context context, CharSequence title) {
         inflater = LayoutInflater.from(context);
         content = inflater.inflate(R.layout.popup_tool_settings, null);
@@ -85,6 +113,15 @@ public class ToolSettingsPopup {
     }
 
     /**
+     * Lays out the sections in the given number of columns, filled row by row, so many sections still fit above the
+     * HUD. Call it before adding sections.
+     */
+    public ToolSettingsPopup setColumns(int columns) {
+        this.columns = Math.max(1, columns);
+        return this;
+    }
+
+    /**
      * Adds a section with the given choices, one of them selected.
      */
     public ToolSettingsPopup addChoices(CharSequence label, List<Choice> choices, int selected,
@@ -95,14 +132,8 @@ public class ToolSettingsPopup {
 
         for (int i = 0; i < choices.size(); i++) {
             Choice choice = choices.get(i);
-            View choiceView = inflater.inflate(R.layout.item_tool_settings_choice, choiceViews, false);
-            ((TextView) choiceView.findViewById(R.id.toolSettingsChoiceLabel)).setText(choice.label);
-
-            if (choice.swatchColor != null) {
-                View swatch = choiceView.findViewById(R.id.toolSettingsChoiceSwatch);
-                swatch.setBackgroundTintList(ColorStateList.valueOf(choice.swatchColor));
-                swatch.setVisibility(View.VISIBLE);
-            }
+            View choiceView = choice.isTile() ? inflateTile(choice, choiceViews) : inflateTextChoice(choice,
+                    choiceViews);
 
             int index = i;
             choiceView.setActivated(i == selected);
@@ -121,8 +152,63 @@ public class ToolSettingsPopup {
             ((LinearLayout.LayoutParams) last.getLayoutParams()).setMarginEnd(0);
         }
 
-        sections.addView(section);
+        addSection(section);
         return this;
+    }
+
+    private View inflateTile(Choice choice, ViewGroup parent) {
+        View tile = inflater.inflate(R.layout.item_tool_settings_tile, parent, false);
+        ((TextView) tile.findViewById(R.id.toolSettingsTileLabel)).setText(choice.label);
+        tile.setContentDescription(choice.label);
+
+        if (choice.icon != 0) {
+            ImageView icon = tile.findViewById(R.id.toolSettingsTileIcon);
+            icon.setImageResource(choice.icon);
+            icon.setVisibility(View.VISIBLE);
+        } else {
+            View swatch = tile.findViewById(R.id.toolSettingsTileSwatch);
+            swatch.setBackgroundTintList(ColorStateList.valueOf(choice.swatchColor));
+            swatch.setVisibility(View.VISIBLE);
+        }
+        return tile;
+    }
+
+    private View inflateTextChoice(Choice choice, ViewGroup parent) {
+        View choiceView = inflater.inflate(R.layout.item_tool_settings_choice, parent, false);
+        ((TextView) choiceView.findViewById(R.id.toolSettingsChoiceLabel)).setText(choice.label);
+        return choiceView;
+    }
+
+    private void addSection(View section) {
+        if (columns == 1) {
+            sections.addView(section);
+            return;
+        }
+
+        // one vertical container per column, so the sections of a column line up across the rows
+        if (columnViews == null) {
+            LinearLayout row = new LinearLayout(content.getContext());
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            sections.addView(row);
+
+            float density = section.getResources().getDisplayMetrics().density;
+            columnViews = new ViewGroup[columns];
+            for (int i = 0; i < columns; i++) {
+                LinearLayout column = new LinearLayout(content.getContext());
+                column.setOrientation(LinearLayout.VERTICAL);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (i > 0) {
+                    // space between the columns
+                    params.setMarginStart(Math.round(24 * density));
+                }
+                row.addView(column, params);
+                columnViews[i] = column;
+            }
+        }
+
+        columnViews[sectionCount % columns].addView(section);
+        sectionCount++;
     }
 
     /**
@@ -153,7 +239,7 @@ public class ToolSettingsPopup {
             }
         });
 
-        sections.addView(section);
+        addSection(section);
         return this;
     }
 

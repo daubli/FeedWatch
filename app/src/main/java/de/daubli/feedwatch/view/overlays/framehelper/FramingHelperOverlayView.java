@@ -1,17 +1,42 @@
-package de.daubli.feedwatch.view.overlays.framehelper; // Replace with your actual package name
+package de.daubli.feedwatch.view.overlays.framehelper;
 
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
 
+/**
+ * Framing guides over the video: a composition grid, frame lines for an aspect ratio and a safe area. With frame
+ * lines, the grid and the safe area are drawn inside them, in the part of the picture that is delivered.
+ */
 public class FramingHelperOverlayView extends View {
+
+    // guides are drawn slightly see-through, so they do not hide the picture
+    private static final int GUIDE_ALPHA = 0xCC;
+
+    private static final float GUIDE_WIDTH_DP = 1.5f;
+
+    // arm length of the center cross, as a share of the shorter frame side
+    private static final float CENTER_CROSS_SIZE = 0.04f;
 
     private Paint linePaint;
 
+    private Paint maskPaint;
+
     private Rect visibleRect = null;
+
+    private final RectF videoBounds = new RectF();
+
+    private final RectF frameBounds = new RectF();
+
+    private FramingGrid grid = FramingGrid.THIRDS;
+
+    private FrameLines frameLines = FrameLines.NONE;
+
+    private SafeArea safeArea = SafeArea.NONE;
 
     public FramingHelperOverlayView(Context context) {
         super(context);
@@ -30,9 +55,14 @@ public class FramingHelperOverlayView extends View {
 
     private void init() {
         linePaint = new Paint();
-        linePaint.setColor(0x80FFFFFF); // semi-transparent white
-        linePaint.setStrokeWidth(2f);
+        linePaint.setColor((GuideColor.WHITE.getColor() & 0x00FFFFFF) | (GUIDE_ALPHA << 24));
+        linePaint.setStrokeWidth(GUIDE_WIDTH_DP * getResources().getDisplayMetrics().density);
+        linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setAntiAlias(true);
+
+        maskPaint = new Paint();
+        maskPaint.setColor(0x99000000);
+        maskPaint.setStyle(Paint.Style.FILL);
     }
 
     /**
@@ -43,36 +73,96 @@ public class FramingHelperOverlayView extends View {
         invalidate();
     }
 
+    public void setGuides(FramingGrid grid, FrameLines frameLines, SafeArea safeArea, GuideColor color) {
+        this.grid = grid;
+        this.frameLines = frameLines;
+        this.safeArea = safeArea;
+        linePaint.setColor((color.getColor() & 0x00FFFFFF) | (GUIDE_ALPHA << 24));
+        invalidate();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        float left, top, right, bottom;
-
         if (visibleRect != null) {
-            left = visibleRect.left;
-            top = visibleRect.top;
-            right = visibleRect.right;
-            bottom = visibleRect.bottom;
+            videoBounds.set(visibleRect);
         } else {
-            left = 0;
-            top = 0;
-            right = getWidth();
-            bottom = getHeight();
+            videoBounds.set(0, 0, getWidth(), getHeight());
+        }
+        if (videoBounds.isEmpty()) {
+            return;
         }
 
-        float width = right - left;
-        float height = bottom - top;
+        frameBounds.set(videoBounds);
+        if (frameLines != FrameLines.NONE) {
+            fitAspectRatio(videoBounds, frameLines.getAspectRatio(), frameBounds);
+            drawMask(canvas);
+            canvas.drawRect(frameBounds, linePaint);
+        }
 
-        float thirdWidth = width / 3f;
-        float thirdHeight = height / 3f;
+        drawGrid(canvas);
 
-        // Vertical lines
-        canvas.drawLine(left + thirdWidth, top, left + thirdWidth, bottom, linePaint);
-        canvas.drawLine(left + 2 * thirdWidth, top, left + 2 * thirdWidth, bottom, linePaint);
+        if (safeArea != SafeArea.NONE) {
+            float insetX = frameBounds.width() * (1f - safeArea.getSize()) / 2f;
+            float insetY = frameBounds.height() * (1f - safeArea.getSize()) / 2f;
+            canvas.drawRect(frameBounds.left + insetX, frameBounds.top + insetY, frameBounds.right - insetX,
+                    frameBounds.bottom - insetY, linePaint);
+        }
+    }
 
-        // Horizontal lines
-        canvas.drawLine(left, top + thirdHeight, right, top + thirdHeight, linePaint);
-        canvas.drawLine(left, top + 2 * thirdHeight, right, top + 2 * thirdHeight, linePaint);
+    /**
+     * The largest rect with the given aspect ratio, centered in the bounds.
+     */
+    private static void fitAspectRatio(RectF bounds, float aspectRatio, RectF out) {
+        float width = bounds.width();
+        float height = width / aspectRatio;
+        if (height > bounds.height()) {
+            height = bounds.height();
+            width = height * aspectRatio;
+        }
+        float left = bounds.centerX() - width / 2f;
+        float top = bounds.centerY() - height / 2f;
+        out.set(left, top, left + width, top + height);
+    }
+
+    private void drawMask(Canvas canvas) {
+        RectF v = videoBounds;
+        RectF f = frameBounds;
+        canvas.drawRect(v.left, v.top, v.right, f.top, maskPaint);
+        canvas.drawRect(v.left, f.bottom, v.right, v.bottom, maskPaint);
+        canvas.drawRect(v.left, f.top, f.left, f.bottom, maskPaint);
+        canvas.drawRect(f.right, f.top, v.right, f.bottom, maskPaint);
+    }
+
+    private void drawGrid(Canvas canvas) {
+        switch (grid) {
+            case THIRDS:
+                drawLinesAt(canvas, 1f / 3f, 2f / 3f);
+                break;
+            case CENTER:
+                float arm = Math.min(frameBounds.width(), frameBounds.height()) * CENTER_CROSS_SIZE;
+                float cx = frameBounds.centerX();
+                float cy = frameBounds.centerY();
+                canvas.drawLine(cx - arm, cy, cx + arm, cy, linePaint);
+                canvas.drawLine(cx, cy - arm, cx, cy + arm, linePaint);
+                break;
+            case NONE:
+            default:
+                break;
+        }
+    }
+
+    /**
+     * Draws a vertical and a horizontal line at each of the given shares of the frame.
+     */
+    private void drawLinesAt(Canvas canvas, float... positions) {
+        RectF f = frameBounds;
+        for (float position : positions) {
+            float x = f.left + f.width() * position;
+            float y = f.top + f.height() * position;
+            canvas.drawLine(x, f.top, x, f.bottom, linePaint);
+            canvas.drawLine(f.left, y, f.right, y, linePaint);
+        }
     }
 }

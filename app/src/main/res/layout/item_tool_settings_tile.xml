@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A choice in a tool settings popup shown as an icon or a color dot above a short label, like the HUD tools -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              xmlns:tools="http://schemas.android.com/tools"
+              android:layout_width="wrap_content"
+              android:layout_height="58dp"
+              android:layout_marginEnd="6dp"
+              android:background="@drawable/bg_tool_choice"
+              android:gravity="center"
+              android:minWidth="60dp"
+              android:orientation="vertical"
+              android:paddingStart="8dp"
+              android:paddingTop="6dp"
+              android:paddingEnd="8dp"
+              android:paddingBottom="5dp">
+
+    <ImageView
+            android:id="@+id/toolSettingsTileIcon"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:duplicateParentState="true"
+            android:importantForAccessibility="no"
+            android:visibility="gone"
+            app:tint="@color/tool_button_content"
+            tools:src="@drawable/ic_guide_thirds"
+            tools:visibility="visible"/>
+
+    <View
+            android:id="@+id/toolSettingsTileSwatch"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_margin="3dp"
+            android:background="@drawable/bg_color_swatch"
+            android:visibility="gone"/>
+
+    <TextView
+            android:id="@+id/toolSettingsTileLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:duplicateParentState="true"
+            android:fontFamily="@font/public_sans_semibold"
+            android:letterSpacing="0.04"
+            android:maxLines="1"
+            android:textColor="@color/tool_button_content"
+            android:textSize="10sp"
+            tools:text="Thirds"/>
+</LinearLayout>

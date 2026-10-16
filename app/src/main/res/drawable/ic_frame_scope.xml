@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2.39:1 frame lines: letterbox bars top and bottom -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="24dp"
+        android:height="24dp"
+        android:viewportWidth="24"
+        android:viewportHeight="24">
+    <path
+            android:pathData="M2,6.4h20v11.2h-20z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.5"/>
+    <path
+            android:pathData="M2,6.4h20v1.42h-20zM2,16.18h20v1.42h-20z"
+            android:fillColor="#FFFFFFFF"
+            android:fillAlpha="0.55"/>
+</vector>

@@ -13,6 +13,7 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.ToIntFunction;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -26,6 +27,10 @@ import de.daubli.feedwatch.uvc.StreamUvcVideoRunner;
 import de.daubli.feedwatch.uvc.UVCSource;
 import de.daubli.feedwatch.view.hud.ToolSettingsPopup;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
+import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
+import de.daubli.feedwatch.view.overlays.framehelper.FramingGrid;
+import de.daubli.feedwatch.view.overlays.framehelper.GuideColor;
+import de.daubli.feedwatch.view.overlays.framehelper.SafeArea;
 
 public class StreamVideoActivity extends AppCompatActivity {
 
@@ -132,6 +137,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         SettingsStore settingsStore = new SettingsStore();
         viewBinding.openGLVideoView.setFocusPeakingColor(settingsStore.getFocusPeakingColor().getColor());
         viewBinding.openGLVideoView.setZebraThreshold(settingsStore.getZebraThreshold());
+        applyFramingGuides(settingsStore);
         if (settingsStore.isFramingHelperOverlayEnabled()) {
             viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
             viewBinding.gridButton.setActivated(true);
@@ -272,7 +278,7 @@ public class StreamVideoActivity extends AppCompatActivity {
 
         List<ToolSettingsPopup.Choice> choices = new ArrayList<>();
         for (FocusPeakingColor color : colors) {
-            choices.add(new ToolSettingsPopup.Choice(getString(color.getLabel()), color.getColor()));
+            choices.add(ToolSettingsPopup.Choice.withColor(getString(color.getLabel()), color.getColor()));
         }
 
         ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.peaking_settings_title))
@@ -316,17 +322,83 @@ public class StreamVideoActivity extends AppCompatActivity {
     private void initializeToggleGridButton() {
         viewBinding.gridButton.setOnClickListener(view -> {
             extendMenuTimeout();
-            SettingsStore settingsStore = new SettingsStore();
-            if (viewBinding.framingHelperOverlayView.getVisibility() == View.VISIBLE) {
-                viewBinding.framingHelperOverlayView.setVisibility(View.GONE);
-                viewBinding.gridButton.setActivated(false);
-                settingsStore.setFramingHelperOverlayEnabled(false);
-            } else {
-                viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
-                viewBinding.gridButton.setActivated(true);
-                settingsStore.setFramingHelperOverlayEnabled(true);
-            }
+            setFramingHelperEnabled(viewBinding.framingHelperOverlayView.getVisibility() != View.VISIBLE);
         });
+        viewBinding.gridButton.setOnLongClickListener(view -> {
+            showFramingSettings();
+            return true;
+        });
+    }
+
+    private void setFramingHelperEnabled(boolean enabled) {
+        viewBinding.framingHelperOverlayView.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        viewBinding.gridButton.setActivated(enabled);
+        new SettingsStore().setFramingHelperOverlayEnabled(enabled);
+    }
+
+    private void showFramingSettings() {
+        SettingsStore settingsStore = new SettingsStore();
+        FramingGrid[] grids = FramingGrid.values();
+        FrameLines[] frameLines = FrameLines.values();
+        SafeArea[] safeAreas = SafeArea.values();
+        GuideColor[] colors = GuideColor.values();
+
+        List<ToolSettingsPopup.Choice> colorChoices = new ArrayList<>();
+        for (GuideColor color : colors) {
+            colorChoices.add(ToolSettingsPopup.Choice.withColor(getString(color.getLabel()), color.getColor()));
+        }
+
+        // two columns: four sections on top of each other do not fit above the HUD in landscape
+        ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.framing_settings_title))
+                .setColumns(2)
+                .addChoices(getString(R.string.framing_settings_grid),
+                        iconChoicesOf(grids, FramingGrid::getLabel, FramingGrid::getIcon),
+                        settingsStore.getFramingGrid().ordinal(), index -> {
+                            settingsStore.setFramingGrid(grids[index]);
+                            showFramingGuides(settingsStore);
+                        })
+                .addChoices(getString(R.string.framing_settings_frame_lines),
+                        iconChoicesOf(frameLines, FrameLines::getLabel, FrameLines::getIcon),
+                        settingsStore.getFrameLines().ordinal(), index -> {
+                            settingsStore.setFrameLines(frameLines[index]);
+                            showFramingGuides(settingsStore);
+                        })
+                .addChoices(getString(R.string.framing_settings_safe_area),
+                        iconChoicesOf(safeAreas, SafeArea::getLabel, SafeArea::getIcon),
+                        settingsStore.getSafeArea().ordinal(), index -> {
+                            settingsStore.setSafeArea(safeAreas[index]);
+                            showFramingGuides(settingsStore);
+                        })
+                .addChoices(getString(R.string.framing_settings_color), colorChoices,
+                        settingsStore.getGuideColor().ordinal(), index -> {
+                            settingsStore.setGuideColor(colors[index]);
+                            showFramingGuides(settingsStore);
+                        });
+        showToolSettings(popup, viewBinding.gridButton);
+    }
+
+    private void applyFramingGuides(SettingsStore settingsStore) {
+        viewBinding.framingHelperOverlayView.setGuides(settingsStore.getFramingGrid(), settingsStore.getFrameLines(),
+                settingsStore.getSafeArea(), settingsStore.getGuideColor());
+    }
+
+    /**
+     * Applies changed guides and turns the framing helper on, the guides are only visible with it.
+     */
+    private void showFramingGuides(SettingsStore settingsStore) {
+        applyFramingGuides(settingsStore);
+        if (viewBinding.framingHelperOverlayView.getVisibility() != View.VISIBLE) {
+            setFramingHelperEnabled(true);
+        }
+    }
+
+    private <T> List<ToolSettingsPopup.Choice> iconChoicesOf(T[] options, ToIntFunction<T> label,
+            ToIntFunction<T> icon) {
+        List<ToolSettingsPopup.Choice> choices = new ArrayList<>();
+        for (T option : options) {
+            choices.add(ToolSettingsPopup.Choice.withIcon(getString(label.applyAsInt(option)), icon.applyAsInt(option)));
+        }
+        return choices;
     }
 
     private void initializeTallyButton() {
