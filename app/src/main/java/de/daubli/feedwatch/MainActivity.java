@@ -193,6 +193,8 @@ public class MainActivity extends AppCompatActivity {
 
         scanExecutor = Executors.newSingleThreadExecutor();
         scheduler = Executors.newSingleThreadScheduledExecutor();
+        // shutdownNow() in stopBackgroundScanning() drops a queued scan before its finally block runs
+        scanInProgress.set(false);
 
         ndiDiscoveryManager.startDiscovery();
 

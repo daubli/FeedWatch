@@ -14,6 +14,7 @@ import java.util.Locale;
 
 import androidx.appcompat.app.AppCompatActivity;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
+import de.daubli.feedwatch.ndi.NdiDiscoveryManager;
 import de.daubli.feedwatch.ndi.NdiSource;
 import de.daubli.feedwatch.ndi.StreamNDIVideoRunner;
 import de.daubli.feedwatch.settings.SettingsStore;
@@ -32,6 +33,8 @@ public class StreamVideoActivity extends AppCompatActivity {
     private VideoSource videoSource;
 
     private StreamVideoRunner runner;
+
+    private NdiDiscoveryManager ndiDiscoveryManager;
 
     private Handler menuHandler;
 
@@ -374,6 +377,29 @@ public class StreamVideoActivity extends AppCompatActivity {
                     View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE
                             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        // MainActivity releases its multicast lock once it is hidden. Holding our own keeps mDNS
+        // discovery alive, so the NDI finder still knows the sources when the stream ends.
+        if (videoSource instanceof NdiSource) {
+            if (ndiDiscoveryManager == null) {
+                ndiDiscoveryManager = new NdiDiscoveryManager(getApplicationContext());
+            }
+            ndiDiscoveryManager.startDiscovery();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        if (ndiDiscoveryManager != null) {
+            ndiDiscoveryManager.stopDiscovery();
         }
     }
 
