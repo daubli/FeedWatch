@@ -17,7 +17,10 @@ via USB. The list updates itself in the background, pull down to refresh it righ
 - **NDI® High Bandwidth Monitoring**
     - Supports NDI® High Bandwidth sources
     - Since NDI® can be network-intensive, using a **USB-C Ethernet adapter** is strongly recommended.
-    - NDI® senders outside mDNS discovery can be added by their IP address in the Settings.
+    - NDI® senders outside mDNS discovery can be added by their IP address in the Settings. The dot after
+      a full block of three digits is added for you. Changes apply right away.
+
+      ![Additional NDI sources in the settings](img/settings.jpeg)
     - **NDI® HX** is currently not supported. I invested some effort and implemented
   a working prototype. However, in order to receive NDI® HX streams for
   longer than 5 minutes, you need currently a NDI® Advanced SDK license.
@@ -70,8 +73,6 @@ You can enable Low Bandwidth Mode in the app’s Settings (gear icon on the sour
 
 Viewer Mode shows only the picture: monitoring tools, overlays and stream info are hidden, only the close and audio
 buttons remain. It can be enabled in the Settings.
-
-![Settings](img/settings.jpeg)
 
 ---
 
