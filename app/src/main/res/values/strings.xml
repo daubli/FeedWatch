@@ -22,6 +22,8 @@
     <string name="settings_section_stream">Stream</string>
     <string name="settings_low_bandwidth">Low bandwidth mode</string>
     <string name="settings_low_bandwidth_summary">Receive the lower-quality NDI proxy stream to save bandwidth and battery</string>
+    <string name="settings_viewer_mode">Viewer mode</string>
+    <string name="settings_viewer_mode_summary">Show only the picture. Monitoring tools and stream info are hidden, close and audio stay available</string>
     <string name="settings_save">Save</string>
     <string name="about_version">Version %1$s</string>
 

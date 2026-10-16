@@ -36,6 +36,9 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private NdiDiscoveryManager ndiDiscoveryManager;
 
+    // only the picture, plus the close and audio buttons
+    private boolean viewerMode;
+
     private Handler menuHandler;
 
     private Runnable hideMenuCallback;
@@ -57,12 +60,17 @@ public class StreamVideoActivity extends AppCompatActivity {
         setContentView(viewBinding.getRoot());
 
         videoSource = resolveVideoSource(getIntent());
+        viewerMode = new SettingsStore().isViewerModeEnabled();
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         initMenu();
         initHud();
         setFullScreen();
-        initSavedState();
+        if (viewerMode) {
+            hideMonitoringUi();
+        } else {
+            initSavedState();
+        }
         showMenuAndScheduleHide();
     }
 
@@ -125,6 +133,16 @@ public class StreamVideoActivity extends AppCompatActivity {
             viewBinding.tallyOverlayView.setVisibility(View.VISIBLE);
             viewBinding.tallyOverlayView.setTallyEnabled(true);
             viewBinding.tallyButton.setActivated(true);
+        }
+    }
+
+    private void hideMonitoringUi() {
+        View[] views = {viewBinding.sourceTypeBadge, viewBinding.sourceNameText, viewBinding.lowBandwidthChip,
+                viewBinding.tallyChip, viewBinding.resolutionChip, viewBinding.fpsChip, viewBinding.formatChip,
+                viewBinding.gridButton, viewBinding.zebraButton, viewBinding.focusAssistButton,
+                viewBinding.tallyButton, viewBinding.audioMeterView};
+        for (View view : views) {
+            view.setVisibility(View.GONE);
         }
     }
 
@@ -269,6 +287,9 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void showAudioEnabled(boolean enabled) {
         viewBinding.audioButton.setActivated(enabled);
+        if (viewerMode) {
+            return;
+        }
         // without audio there are no levels to show
         viewBinding.audioMeterView.setVisibility(enabled ? View.VISIBLE : View.INVISIBLE);
     }
@@ -295,6 +316,9 @@ public class StreamVideoActivity extends AppCompatActivity {
      * @param frameRate nominal or measured frames per second, or 0 if unknown
      */
     public void onVideoFormat(int width, int height, float frameRate, String format) {
+        if (viewerMode) {
+            return;
+        }
         if (width != lastVideoWidth || height != lastVideoHeight) {
             lastVideoWidth = width;
             lastVideoHeight = height;

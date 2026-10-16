@@ -26,6 +26,8 @@ public class SettingsStore {
 
     private static final String AUDIO_ENABLED_KEY = "de.daubli.feedwatch.ndi.audio.enabled";
 
+    private static final String VIEWER_MODE_ENABLED_KEY = "de.daubli.feedwatch.view.viewermode.enabled";
+
     public SettingsStore() {
         sharedPreferences = getAppContext().getSharedPreferences("de.daubli.feedwatch_preferences",
                 Context.MODE_PRIVATE);
@@ -131,6 +133,20 @@ public class SettingsStore {
     public void setAudioEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(AUDIO_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * Shows only the picture while streaming: monitoring tools, overlays and stream info are hidden, only the close
+     * and audio buttons remain.
+     */
+    public boolean isViewerModeEnabled() {
+        return sharedPreferences.getBoolean(VIEWER_MODE_ENABLED_KEY, false);
+    }
+
+    public void setViewerModeEnabled(boolean enabled) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(VIEWER_MODE_ENABLED_KEY, enabled);
         editor.apply();
     }
 }

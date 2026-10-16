@@ -15,6 +15,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     CompoundButton lowBandwidthModeEnabledSwitch;
 
+    CompoundButton viewerModeEnabledSwitch;
+
     private SettingsStore settingsStore;
 
     @Override
@@ -27,9 +29,11 @@ public class SettingsActivity extends AppCompatActivity {
 
         additionalSourcesEditText = findViewById(R.id.additionalSourcesEditText);
         lowBandwidthModeEnabledSwitch = findViewById(R.id.lowBandwidthMode);
+        viewerModeEnabledSwitch = findViewById(R.id.viewerMode);
 
         // the whole row toggles the switch
         findViewById(R.id.lowBandwidthRow).setOnClickListener(v -> lowBandwidthModeEnabledSwitch.toggle());
+        findViewById(R.id.viewerModeRow).setOnClickListener(v -> viewerModeEnabledSwitch.toggle());
 
         settingsStore = new SettingsStore();
 
@@ -37,6 +41,7 @@ public class SettingsActivity extends AppCompatActivity {
         button.setOnClickListener((View v) -> {
             this.settingsStore.setAdditionalSources(additionalSourcesEditText.getText().toString());
             this.settingsStore.setLowBandwidthModeEnabled(lowBandwidthModeEnabledSwitch.isChecked());
+            this.settingsStore.setViewerModeEnabled(viewerModeEnabledSwitch.isChecked());
             this.finish();
         });
     }
@@ -46,5 +51,6 @@ public class SettingsActivity extends AppCompatActivity {
         super.onResume();
         this.additionalSourcesEditText.setText(settingsStore.getAdditionalSources());
         this.lowBandwidthModeEnabledSwitch.setChecked(settingsStore.isLowBandwidthModeEnabled());
+        this.viewerModeEnabledSwitch.setChecked(settingsStore.isViewerModeEnabled());
     }
 }

@@ -119,6 +119,47 @@
                         android:layout_height="wrap_content"
                         android:contentDescription="@string/settings_low_bandwidth"/>
             </LinearLayout>
+
+            <LinearLayout
+                    android:id="@+id/viewerModeRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_settings_card"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_viewer_mode"
+                            android:textColor="@color/fw_text_primary"
+                            android:textSize="16sp"/>
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:lineSpacingMultiplier="1.15"
+                            android:text="@string/settings_viewer_mode_summary"
+                            android:textColor="@color/fw_text_secondary"
+                            android:textSize="13sp"/>
+                </LinearLayout>
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/viewerMode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/settings_viewer_mode"/>
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 
