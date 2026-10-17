@@ -25,6 +25,7 @@ import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.sources.VideoSource;
 import de.daubli.feedwatch.uvc.StreamUvcVideoRunner;
 import de.daubli.feedwatch.uvc.UVCSource;
+import de.daubli.feedwatch.view.hud.StreamStatsPopup;
 import de.daubli.feedwatch.view.hud.ToolSettingsPopup;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
 import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
@@ -63,6 +64,9 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     @Nullable
     private ToolSettingsPopup toolSettingsPopup;
+
+    @Nullable
+    private StreamStatsPopup statsPopup;
 
     private int lastVideoWidth;
 
@@ -131,6 +135,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         initializeWaveformButton();
         initializeTallyButton();
         initializeAudioButton();
+        initializeStatsButton();
         initializeCloseButton();
         initShowHideMenu();
     }
@@ -167,7 +172,7 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void hideMonitoringUi() {
         View[] views = {viewBinding.sourceTypeBadge, viewBinding.sourceNameText, viewBinding.lowBandwidthChip,
-                viewBinding.tallyChip, viewBinding.resolutionChip, viewBinding.fpsChip, viewBinding.formatChip,
+                viewBinding.tallyChip, viewBinding.resolutionChip, viewBinding.fpsChip, viewBinding.statsButton, viewBinding.formatChip,
                 viewBinding.gridButton, viewBinding.zebraButton, viewBinding.focusAssistButton,
                 viewBinding.waveformButton, viewBinding.tallyButton, viewBinding.audioMeterView};
         for (View view : views) {
@@ -222,8 +227,8 @@ public class StreamVideoActivity extends AppCompatActivity {
     }
 
     private void onScreenTapped() {
-        // a tap next to an open tool settings popup only closes it
-        if (dismissToolSettings()) {
+        // a tap next to an open popup only closes it
+        if (dismissToolSettings() | dismissStats()) {
             return;
         }
         if (hudShown) {
@@ -355,6 +360,7 @@ public class StreamVideoActivity extends AppCompatActivity {
      */
     private void showToolSettings(ToolSettingsPopup popup, View toolButton) {
         dismissToolSettings();
+        dismissStats();
         menuHandler.removeCallbacks(hideMenuCallback);
 
         popup.setOnDismissListener(this::extendMenuTimeout);
@@ -368,6 +374,50 @@ public class StreamVideoActivity extends AppCompatActivity {
     private boolean dismissToolSettings() {
         ToolSettingsPopup popup = toolSettingsPopup;
         toolSettingsPopup = null;
+        if (popup != null && popup.isShowing()) {
+            popup.dismiss();
+            return true;
+        }
+        return false;
+    }
+
+    private void initializeStatsButton() {
+        viewBinding.statsButton.setOnClickListener(view -> {
+            // a second tap closes the statistics again
+            if (dismissStats()) {
+                return;
+            }
+            dismissToolSettings();
+            showStats();
+        });
+    }
+
+    /**
+     * Opens the stream statistics below the stats button. The HUD stays open while they are shown.
+     */
+    private void showStats() {
+        menuHandler.removeCallbacks(hideMenuCallback);
+
+        StreamStatsPopup popup = new StreamStatsPopup(this, stats -> {
+            if (runner != null) {
+                runner.collectStats(stats);
+            }
+        });
+        popup.setOnDismissListener(() -> {
+            viewBinding.statsButton.setActivated(false);
+            extendMenuTimeout();
+        });
+        statsPopup = popup;
+        viewBinding.statsButton.setActivated(true);
+        popup.showBelow(viewBinding.statsButton);
+    }
+
+    /**
+     * @return whether the statistics were open
+     */
+    private boolean dismissStats() {
+        StreamStatsPopup popup = statsPopup;
+        statsPopup = null;
         if (popup != null && popup.isShowing()) {
             popup.dismiss();
             return true;
@@ -664,6 +714,7 @@ public class StreamVideoActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         dismissToolSettings();
+        dismissStats();
 
         if (runner != null) {
             runner.shutdown();

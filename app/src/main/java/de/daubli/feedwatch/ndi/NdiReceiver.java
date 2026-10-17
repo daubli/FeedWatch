@@ -29,6 +29,17 @@ public class NdiReceiver extends NdiFrameCleaner {
         return receiveCaptureTally(instancePointer, timeoutMs);
     }
 
+    /**
+     * Fills {@code counts} with the frames received since connecting: video, dropped video, audio and dropped audio.
+     */
+    public void getPerformance(long[] counts) {
+        receiveGetPerformance(instancePointer, counts);
+    }
+
+    public int getConnectionCount() {
+        return receiveGetConnectionCount(instancePointer);
+    }
+
     public void close() {
         receiveDestroy(instancePointer);
     }
@@ -45,4 +56,8 @@ public class NdiReceiver extends NdiFrameCleaner {
     private static native void receiveDestroy(long instancePointer);
 
     private static native NdiTally receiveCaptureTally(long receiverPtr, int timeoutMs);
+
+    private static native void receiveGetPerformance(long receiverPtr, long[] counts);
+
+    private static native int receiveGetConnectionCount(long receiverPtr);
 }

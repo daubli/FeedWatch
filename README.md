@@ -56,6 +56,18 @@ The default source can also be removed in the Settings, even while it is not ava
 Tap the picture to show or hide the controls. The top bar shows the source, its tally state, resolution, frame rate
 and pixel format. The bottom bar switches the monitoring tools and audio.
 
+### Stream Statistics
+
+Tap the chart icon next to the frame rate to show the stream statistics, a second tap closes them. They update
+twice a second:
+
+- **NDI®**: duration, bandwidth, connections, received and shown frame rate, received, dropped and skipped frames,
+  audio delay and dropped audio frames
+- **UVC**: duration, received and shown frame rate, data rate of the MJPEG stream, received and dropped frames and
+  the time to decode a frame
+
+<img src="img/stream-stats.jpeg" alt="Stream statistics" width="600">
+
 ### Audio
 
 NDI® audio is played back together with the picture, with a level meter for the left and right channel. Use the

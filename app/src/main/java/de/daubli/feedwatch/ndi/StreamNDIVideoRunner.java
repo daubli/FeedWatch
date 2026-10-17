@@ -8,14 +8,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Choreographer;
 import android.view.View;
 import android.widget.Toast;
+import de.daubli.feedwatch.R;
 import de.daubli.feedwatch.StreamVideoActivity;
 import de.daubli.feedwatch.StreamVideoRunner;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
 import de.daubli.feedwatch.settings.SettingsStore;
+import de.daubli.feedwatch.stats.RateMeter;
+import de.daubli.feedwatch.stats.StreamStats;
 import de.daubli.feedwatch.view.base.OpenGLVideoView;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingHelperOverlayView;
 import de.daubli.feedwatch.view.overlays.tally.TallyOverlayView;
@@ -47,7 +51,25 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private final TallyOverlayView tallyOverlayView;
 
-    private NdiReceiver receiver;
+    // read by the statistics on the main thread
+    private volatile NdiReceiver receiver;
+
+    private volatile boolean lowBandwidth;
+
+    // when the receiver connected, 0 before
+    private volatile long connectedAtMillis;
+
+    // statistics, only touched on the main thread
+    private long shownFrames;
+
+    // frames replaced by a newer one before they were due
+    private long skippedFrames;
+
+    private final RateMeter receivedRate = new RateMeter();
+
+    private final RateMeter shownRate = new RateMeter();
+
+    private final long[] performance = new long[4];
 
     private NdiFrameSync frameSync;
 
@@ -100,8 +122,11 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     public void run() {
         try {
             SettingsStore settingsStore = new SettingsStore();
-            receiver = new NdiReceiver(settingsStore.isLowBandwidthModeEnabled());
+            lowBandwidth = settingsStore.isLowBandwidthModeEnabled();
+            NdiReceiver receiver = new NdiReceiver(lowBandwidth);
             receiver.connect(ndiSource);
+            this.receiver = receiver;
+            connectedAtMillis = SystemClock.elapsedRealtime();
 
             frameSync = new NdiFrameSync(receiver);
 
@@ -179,6 +204,39 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             }
         } else {
             audioPlayer.stop();
+        }
+    }
+
+    @Override
+    public void collectStats(StreamStats stats) {
+        long connectedAt = connectedAtMillis;
+        stats.add(R.string.stats_duration,
+                connectedAt > 0 ? StreamStats.duration(SystemClock.elapsedRealtime() - connectedAt) : StreamStats.UNKNOWN);
+        stats.add(R.string.stats_bandwidth,
+                activity.getString(lowBandwidth ? R.string.stats_bandwidth_low : R.string.stats_bandwidth_high));
+
+        // the receiver is closed on the main thread too, so it stays valid while it is read here
+        NdiReceiver receiver = this.receiver;
+        if (receiver != null) {
+            receiver.getPerformance(performance);
+            stats.add(R.string.stats_connections, String.valueOf(receiver.getConnectionCount()));
+            stats.add(R.string.stats_received, StreamStats.frameRate(receivedRate.update(performance[0])));
+        }
+        stats.add(R.string.stats_shown, StreamStats.frameRate(shownRate.update(shownFrames)));
+        if (receiver != null) {
+            stats.add(R.string.stats_frames, StreamStats.count(performance[0]));
+            stats.add(R.string.stats_dropped, StreamStats.countOf(performance[1], performance[0]));
+        }
+        stats.add(R.string.stats_skipped, StreamStats.count(skippedFrames));
+
+        if (audioEnabled) {
+            stats.add(R.string.stats_audio_delay,
+                    audioLatencyNanos >= 0 ? StreamStats.millis(audioLatencyNanos / 1e6f) : StreamStats.UNKNOWN);
+            if (receiver != null) {
+                stats.add(R.string.stats_audio_dropped, StreamStats.countOf(performance[3], performance[2]));
+            }
+        } else {
+            stats.add(R.string.stats_audio_delay, activity.getString(R.string.stats_audio_off));
         }
     }
 
@@ -261,6 +319,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                     float frameRate = frameRate(frame);
 
                     videoView.updateFrame(frame.getData(), width, height, fourCCType, () -> recycleFrame(frame));
+                    shownFrames++;
                     framingHelperOverlayView.setFramingRect(videoView.getVideoRect());
                     activity.onVideoFormat(width, height, frameRate, fourCCType.name());
 
@@ -294,6 +353,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 pendingFrames.poll();
                 if (due != null) {
                     recycleFrame(due);
+                    skippedFrames++;
                 }
                 due = pending.frame;
             }

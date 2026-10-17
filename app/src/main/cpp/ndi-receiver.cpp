@@ -61,6 +61,33 @@ Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveDestroy(JNIEnv* env, jclass /*cl
     NDIlib_recv_destroy(recv);
 }
 
+/**
+ * Fills counts with the frames received since connecting: {video, dropped video, audio, dropped audio}.
+ */
+JNIEXPORT void JNICALL
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveGetPerformance(
+    JNIEnv* env, jclass /*clazz*/, jlong pReceiver, jlongArray jCounts)
+{
+    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
+    if (!recv) return;
+
+    NDIlib_recv_performance_t total;
+    NDIlib_recv_performance_t dropped;
+    std::memset(&total, 0, sizeof(total));
+    std::memset(&dropped, 0, sizeof(dropped));
+    NDIlib_recv_get_performance(recv, &total, &dropped);
+
+    jlong counts[4] = {total.video_frames, dropped.video_frames, total.audio_frames, dropped.audio_frames};
+    env->SetLongArrayRegion(jCounts, 0, 4, counts);
+}
+
+JNIEXPORT jint JNICALL
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveGetConnectionCount(JNIEnv* env, jclass /*clazz*/, jlong pReceiver) {
+    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
+    if (!recv) return 0;
+    return NDIlib_recv_get_no_connections(recv);
+}
+
 static bool attr_is_true(const char* xml, const char* attr) {
     if (!xml || !attr) return false;
 
