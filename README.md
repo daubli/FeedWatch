@@ -62,7 +62,7 @@ Tap the chart icon next to the frame rate to show the stream statistics, a secon
 twice a second:
 
 - **NDI®**: duration, bandwidth, connections, received and shown frame rate, received, dropped and skipped frames,
-  audio delay and dropped audio frames
+  audio delay, audio buffer (filled / target), audio gaps and dropped audio frames
 - **UVC**: duration, received and shown frame rate, data rate of the MJPEG stream, received and dropped frames and
   the time to decode a frame
 
@@ -73,6 +73,10 @@ twice a second:
 NDI® audio is played back together with the picture, with a level meter for the left and right channel. Use the
 **AUDIO** button to mute it. Without audio, the picture is shown with the lowest latency instead of waiting for its
 audio.
+
+Audio goes through a jitter buffer, so packets that Wi-Fi holds back for a moment do not cause gaps. It starts at
+100 ms and grows by 50 ms each time it runs empty anyway, up to 200 ms. The picture waits for its audio, so a larger
+buffer delays both, but they stay in sync.
 
 ### Low Bandwidth Mode
 

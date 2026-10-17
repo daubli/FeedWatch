@@ -28,8 +28,9 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private static final String TAG = "StreamNDI";
 
-    // Frames wait in pendingFrames until their audio is heard: enough for ~250 ms of delay at 50 fps, plus the
-    // frames in flight to GL. They are only wrappers, the buffers belong to the frame sync.
+    // Frames wait in pendingFrames until their audio is heard: enough for ~250 ms of delay at 50 fps (the audio jitter
+    // buffer at its limit plus the output latency), plus the frames in flight to GL. They are only wrappers, the
+    // buffers belong to the frame sync.
     private static final int VIDEO_FRAME_POOL_SIZE = 16;
 
     // From the Choreographer frame time to the frame being on screen: GL draws it in this frame and SurfaceFlinger
@@ -71,6 +72,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private final long[] performance = new long[4];
 
+    private final long[] audioBuffer = new long[4];
+
     private NdiFrameSync frameSync;
 
     // only touched on the main thread
@@ -78,7 +81,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private boolean audioEnabled;
 
-    // time from pulling audio out of the frame sync to hearing it, -1 while unknown
+    // time from audio arriving to hearing it, -1 while unknown
     private long audioLatencyNanos = -1;
 
     private final float[] audioPeaks = new float[2];
@@ -142,7 +145,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 if (!running) {
                     return;
                 }
-                audioPlayer = new NdiAudioPlayer(frameSync);
+                audioPlayer = new NdiAudioPlayer(ndiSource);
                 // read now: the HUD button may have changed it while the stream was starting
                 setAudioEnabled(new SettingsStore().isAudioEnabled());
                 choreographer = Choreographer.getInstance();
@@ -176,7 +179,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             joinThread(videoCaptureThread);
 
             mainHandler.post(() -> {
-                // the player and the frames use the frame sync, so they go first
+                // the frames use the frame sync, so they go first
                 safeCloseAudioPlayer();
                 safeReleaseVideoFrames();
                 safeCloseFrameSync();
@@ -232,8 +235,13 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         if (audioEnabled) {
             stats.add(R.string.stats_audio_delay,
                     audioLatencyNanos >= 0 ? StreamStats.millis(audioLatencyNanos / 1e6f) : StreamStats.UNKNOWN);
-            if (receiver != null) {
-                stats.add(R.string.stats_audio_dropped, StreamStats.countOf(performance[3], performance[2]));
+            // the player is created once the stream started
+            if (audioPlayer != null) {
+                audioPlayer.getBufferStats(audioBuffer);
+                stats.add(R.string.stats_audio_buffer,
+                        activity.getString(R.string.stats_audio_buffer_value, audioBuffer[1], audioBuffer[0]));
+                stats.add(R.string.stats_audio_underruns, StreamStats.count(audioBuffer[2]));
+                stats.add(R.string.stats_audio_dropped, StreamStats.count(audioBuffer[3]));
             }
         } else {
             stats.add(R.string.stats_audio_delay, activity.getString(R.string.stats_audio_off));
@@ -261,7 +269,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                             }
                             lastTimestamp = timestamp;
 
-                            // the audio pulled from the frame sync now belongs to this frame
+                            // the audio arriving now belongs to this frame
                             pendingFrames.offer(new PendingFrame(captureFrame, System.nanoTime()));
                             // blocks until a frame is handed back
                             captureFrame = freeFrames.take();

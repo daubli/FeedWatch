@@ -87,6 +87,9 @@
     <string name="stats_decode_time">Decode time</string>
     <string name="stats_audio_delay">Audio delay</string>
     <string name="stats_audio_dropped">Audio dropped</string>
+    <string name="stats_audio_buffer">Audio buffer</string>
+    <string name="stats_audio_buffer_value">%1$d / %2$d ms</string>
+    <string name="stats_audio_underruns">Audio gaps</string>
     <string name="stats_audio_off">Off</string>
     <string name="framing_off">Off</string>
     <string name="framing_grid_thirds">Thirds</string>
