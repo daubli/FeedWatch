@@ -75,7 +75,9 @@ NDI® audio is played back together with the picture, with a level meter for the
 audio.
 
 Audio goes through a jitter buffer, so packets that Wi-Fi holds back for a moment do not cause gaps. It starts at
-100 ms and grows by 50 ms each time it runs empty anyway, up to 200 ms. The picture waits for its audio, so a larger
+100 ms and grows by 50 ms each time it runs empty anyway, up to 200 ms. On a steady connection it shrinks again by
+50 ms, down to 50 ms, once 30 seconds passed without gaps and the delays seen would still fit. If it runs empty again
+soon after, it waits twice as long before the next try, up to 8 minutes. The picture waits for its audio, so a larger
 buffer delays both, but they stay in sync.
 
 ### Low Bandwidth Mode

@@ -23,6 +23,17 @@ const int32_t BUFFER_INITIAL_MS = 100;
 const int32_t BUFFER_STEP_MS = 50;
 const int32_t BUFFER_MAX_MS = 200;
 
+// On a steady connection the target shrinks again: after a window without running empty, if the deepest dip of the
+// level in it plus a margin also fits into the smaller target. Wi-Fi gaps come in rarer, larger ones too: if the
+// buffer runs empty within two windows after shrinking, the window doubles, up to the maximum.
+const int32_t BUFFER_MIN_MS = 50;
+const int64_t BUFFER_SHRINK_WINDOW_NANOS = 30 * 1000000000LL;
+const int64_t BUFFER_SHRINK_WINDOW_MAX_NANOS = 8 * 60 * 1000000000LL;
+const int32_t BUFFER_SHRINK_MARGIN_MS = 30;
+
+// the level counts as settled at the target within this, only then the target shrinks again
+const int32_t BUFFER_SETTLED_MS = 15;
+
 // audio buffered beyond the target plus this, e.g. after a stall of the output, is dropped so it does not delay
 // the picture
 const int32_t BUFFER_TRIM_MS = 100;
@@ -31,8 +42,9 @@ const int32_t BUFFER_TRIM_MS = 100;
 // difference between sender and device. 0.1 % is inaudible, clocks differ by ~0.01 %.
 const double MAX_RATE_CORRECTION = 0.001;
 
-// rate correction per second of deviation from the target, before the limit
-const double RATE_CORRECTION_PER_SECOND = 0.01;
+// rate correction per second of deviation from the target, before the limit: 50 ms off uses the full correction,
+// so a target 50 ms lower is reached in about a minute
+const double RATE_CORRECTION_PER_SECOND = 0.02;
 
 // smoothing of the buffer level for the rate correction, in output callbacks (10 ms each): audio arrives in bursts
 const double LEVEL_AVERAGE_CALLBACKS = 100;
@@ -189,6 +201,8 @@ public:
                 return oboe::DataCallbackResult::Continue;
             }
             buffering = false;
+            shrinkWindowStart = playedAt;
+            shrinkWindowDip = 0;
             // Playback starts when a burst pushes the level past the target. What the burst brought on top would
             // stay as extra delay, the rate correction only removes it over minutes.
             ring.consume(buffered - target);
@@ -196,7 +210,14 @@ public:
             averageLevel = buffered;
         } else if (buffered < needed) {
             underruns.fetch_add(1, std::memory_order_relaxed);
-            bufferTargetMs.store(std::min(targetMs + BUFFER_STEP_MS, BUFFER_MAX_MS), std::memory_order_relaxed);
+            int32_t largerMs = std::min(targetMs + BUFFER_STEP_MS, BUFFER_MAX_MS);
+            bufferTargetMs.store(largerMs, std::memory_order_relaxed);
+            if (lastShrinkAt != 0 && playedAt - lastShrinkAt < 2 * shrinkWindowNanos) {
+                // shrunk too early
+                shrinkWindowNanos = std::min(2 * shrinkWindowNanos, BUFFER_SHRINK_WINDOW_MAX_NANOS);
+            }
+            __android_log_print(ANDROID_LOG_INFO, TAG, "Buffer ran empty, target %d ms, next shrink after %lld s",
+                    largerMs, (long long) (shrinkWindowNanos / 1000000000LL));
             buffering = true;
             std::fill(out, out + 2 * numFrames, 0.f);
             return oboe::DataCallbackResult::Continue;
@@ -215,6 +236,24 @@ public:
         double correction = std::clamp(deviationSeconds * RATE_CORRECTION_PER_SECOND,
                 -MAX_RATE_CORRECTION, MAX_RATE_CORRECTION);
         double step = nominalStep * (1 + correction);
+
+        // how far the level dips below its average, right after this pull: the jitter the buffer has to cover
+        shrinkWindowDip = std::max(shrinkWindowDip, averageLevel - (buffered - needed));
+        if (playedAt - shrinkWindowStart >= shrinkWindowNanos) {
+            int32_t smallerMs = std::max(targetMs - BUFFER_STEP_MS, BUFFER_MIN_MS);
+            double offTargetMs = fabs(averageLevel - target) * 1000 / sourceRate;
+            double coveredMs = shrinkWindowDip * 1000 / sourceRate + BUFFER_SHRINK_MARGIN_MS;
+            if (smallerMs < targetMs && offTargetMs < BUFFER_SETTLED_MS && coveredMs <= smallerMs) {
+                // the rate correction plays the surplus off slowly
+                bufferTargetMs.store(smallerMs, std::memory_order_relaxed);
+                lastShrinkAt = playedAt;
+                __android_log_print(ANDROID_LOG_INFO, TAG, "Steady for %lld s with dips of %.0f ms, target %d ms",
+                        (long long) (shrinkWindowNanos / 1000000000LL), shrinkWindowDip * 1000 / sourceRate,
+                        smallerMs);
+            }
+            shrinkWindowStart = playedAt;
+            shrinkWindowDip = 0;
+        }
 
         float peakLeft = 0.f;
         float peakRight = 0.f;
@@ -434,6 +473,10 @@ private:
     bool buffering = true;
     double phase = 0;
     double averageLevel = 0;
+    int64_t shrinkWindowStart = 0;
+    double shrinkWindowDip = 0;
+    int64_t shrinkWindowNanos = BUFFER_SHRINK_WINDOW_NANOS;
+    int64_t lastShrinkAt = 0;
     float previousLeft = 0.f;
     float previousRight = 0.f;
 
