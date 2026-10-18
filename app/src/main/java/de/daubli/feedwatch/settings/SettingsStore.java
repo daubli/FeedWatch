@@ -14,6 +14,9 @@ import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingGrid;
 import de.daubli.feedwatch.view.overlays.framehelper.GuideColor;
 import de.daubli.feedwatch.view.overlays.framehelper.SafeArea;
+import de.daubli.feedwatch.view.overlays.vectorscope.VectorscopeMode;
+import de.daubli.feedwatch.view.overlays.vectorscope.VectorscopeView;
+import de.daubli.feedwatch.view.overlays.vectorscope.VectorscopeZoom;
 import de.daubli.feedwatch.view.overlays.waveform.WaveformMode;
 import de.daubli.feedwatch.view.overlays.waveform.WaveformMonitorView;
 import de.daubli.feedwatch.view.overlays.zebra.ZebraOverlay;
@@ -52,6 +55,18 @@ public class SettingsStore {
     private static final String WAVEFORM_Y_KEY = "de.daubli.feedwatch.view.overlays.waveform.y";
 
     private static final String WAVEFORM_WIDTH_KEY = "de.daubli.feedwatch.view.overlays.waveform.width";
+
+    private static final String VECTORSCOPE_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.vectorscope.enabled";
+
+    private static final String VECTORSCOPE_MODE_KEY = "de.daubli.feedwatch.view.overlays.vectorscope.mode";
+
+    private static final String VECTORSCOPE_ZOOM_KEY = "de.daubli.feedwatch.view.overlays.vectorscope.zoom";
+
+    private static final String VECTORSCOPE_X_KEY = "de.daubli.feedwatch.view.overlays.vectorscope.x";
+
+    private static final String VECTORSCOPE_Y_KEY = "de.daubli.feedwatch.view.overlays.vectorscope.y";
+
+    private static final String VECTORSCOPE_WIDTH_KEY = "de.daubli.feedwatch.view.overlays.vectorscope.width";
 
     private static final String TALLY_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.tally.enabled";
 
@@ -284,6 +299,61 @@ public class SettingsStore {
         editor.putFloat(WAVEFORM_X_KEY, x);
         editor.putFloat(WAVEFORM_Y_KEY, y);
         editor.putFloat(WAVEFORM_WIDTH_KEY, widthDp);
+        editor.apply();
+    }
+
+    public boolean isVectorscopeEnabled() {
+        return sharedPreferences.getBoolean(VECTORSCOPE_ENABLED_KEY, false);
+    }
+
+    public void setVectorscopeEnabled(boolean enabled) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(VECTORSCOPE_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * How the vectorscope draws its trace, in color by default.
+     */
+    public VectorscopeMode getVectorscopeMode() {
+        return getEnum(VECTORSCOPE_MODE_KEY, VectorscopeMode.class, VectorscopeMode.COLOR);
+    }
+
+    public void setVectorscopeMode(VectorscopeMode mode) {
+        putEnum(VECTORSCOPE_MODE_KEY, mode);
+    }
+
+    public VectorscopeZoom getVectorscopeZoom() {
+        return getEnum(VECTORSCOPE_ZOOM_KEY, VectorscopeZoom.class, VectorscopeZoom.NORMAL);
+    }
+
+    public void setVectorscopeZoom(VectorscopeZoom zoom) {
+        putEnum(VECTORSCOPE_ZOOM_KEY, zoom);
+    }
+
+    /**
+     * Horizontal place of the vectorscope in the free space of the screen, 0 is the left edge.
+     */
+    public float getVectorscopeX() {
+        return sharedPreferences.getFloat(VECTORSCOPE_X_KEY, VectorscopeView.DEFAULT_X_FRACTION);
+    }
+
+    /**
+     * Vertical place of the vectorscope in the free space of the screen, 0 is the top edge.
+     */
+    public float getVectorscopeY() {
+        return sharedPreferences.getFloat(VECTORSCOPE_Y_KEY, VectorscopeView.DEFAULT_Y_FRACTION);
+    }
+
+    public float getVectorscopeWidthDp() {
+        return sharedPreferences.getFloat(VECTORSCOPE_WIDTH_KEY, VectorscopeView.DEFAULT_WIDTH_DP);
+    }
+
+    public void setVectorscopePlacement(float x, float y, float widthDp) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putFloat(VECTORSCOPE_X_KEY, x);
+        editor.putFloat(VECTORSCOPE_Y_KEY, y);
+        editor.putFloat(VECTORSCOPE_WIDTH_KEY, widthDp);
         editor.apply();
     }
 

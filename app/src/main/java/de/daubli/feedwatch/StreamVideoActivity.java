@@ -32,6 +32,8 @@ import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingGrid;
 import de.daubli.feedwatch.view.overlays.framehelper.GuideColor;
 import de.daubli.feedwatch.view.overlays.framehelper.SafeArea;
+import de.daubli.feedwatch.view.overlays.vectorscope.VectorscopeMode;
+import de.daubli.feedwatch.view.overlays.vectorscope.VectorscopeZoom;
 import de.daubli.feedwatch.view.overlays.waveform.WaveformMode;
 
 public class StreamVideoActivity extends AppCompatActivity {
@@ -133,6 +135,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         initializeToggleFocusAssistButton();
         initializeToggleGridButton();
         initializeWaveformButton();
+        initializeVectorscopeButton();
         initializeTallyButton();
         initializeAudioButton();
         initializeStatsButton();
@@ -150,6 +153,13 @@ public class StreamVideoActivity extends AppCompatActivity {
                 settingsStore.getWaveformWidthDp());
         if (settingsStore.isWaveformEnabled()) {
             setWaveformEnabled(true);
+        }
+        viewBinding.vectorscopeView.setMode(settingsStore.getVectorscopeMode());
+        viewBinding.vectorscopeView.setZoom(settingsStore.getVectorscopeZoom());
+        viewBinding.vectorscopeView.setPlacement(settingsStore.getVectorscopeX(), settingsStore.getVectorscopeY(),
+                settingsStore.getVectorscopeWidthDp());
+        if (settingsStore.isVectorscopeEnabled()) {
+            setVectorscopeEnabled(true);
         }
         if (settingsStore.isFramingHelperOverlayEnabled()) {
             viewBinding.framingHelperOverlayView.setVisibility(View.VISIBLE);
@@ -174,7 +184,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         View[] views = {viewBinding.sourceTypeBadge, viewBinding.sourceNameText, viewBinding.lowBandwidthChip,
                 viewBinding.tallyChip, viewBinding.resolutionChip, viewBinding.fpsChip, viewBinding.statsButton, viewBinding.formatChip,
                 viewBinding.gridButton, viewBinding.zebraButton, viewBinding.focusAssistButton,
-                viewBinding.waveformButton, viewBinding.tallyButton, viewBinding.audioMeterView};
+                viewBinding.waveformButton, viewBinding.vectorscopeButton, viewBinding.tallyButton, viewBinding.audioMeterView};
         for (View view : views) {
             view.setVisibility(View.GONE);
         }
@@ -222,13 +232,14 @@ public class StreamVideoActivity extends AppCompatActivity {
 
         // on the root rather than the video view, which stays invisible until the first frame arrives
         viewBinding.getRoot().setOnClickListener(v -> onScreenTapped());
-        // the waveform monitor takes touches to be moved, a tap on it counts as a tap on the picture
+        // the scopes take touches to be moved, a tap on one counts as a tap on the picture
         viewBinding.waveformMonitorView.setOnClickListener(v -> onScreenTapped());
+        viewBinding.vectorscopeView.setOnClickListener(v -> onScreenTapped());
     }
 
     private void onScreenTapped() {
         // a tap next to an open popup only closes it
-        if (dismissToolSettings() | dismissStats()) {
+        if (dismissToolSettings() || dismissStats()) {
             return;
         }
         if (hudShown) {
@@ -287,7 +298,7 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private void setWaveformEnabled(boolean enabled) {
         viewBinding.waveformMonitorView.setVisibility(enabled ? View.VISIBLE : View.GONE);
-        viewBinding.openGLVideoView.setWaveformListener(enabled ? viewBinding.waveformMonitorView : null);
+        viewBinding.openGLVideoView.setScopeListening(viewBinding.waveformMonitorView, enabled);
         viewBinding.waveformButton.setActivated(enabled);
         new SettingsStore().setWaveformEnabled(enabled);
     }
@@ -314,6 +325,67 @@ public class StreamVideoActivity extends AppCompatActivity {
                             }
                         });
         showToolSettings(popup, viewBinding.waveformButton);
+    }
+
+    private void initializeVectorscopeButton() {
+        viewBinding.vectorscopeButton.setOnClickListener(view -> {
+            extendMenuTimeout();
+            setVectorscopeEnabled(!new SettingsStore().isVectorscopeEnabled());
+        });
+        viewBinding.vectorscopeButton.setOnLongClickListener(view -> {
+            showVectorscopeSettings();
+            return true;
+        });
+        viewBinding.vectorscopeView.setOnPlacementChangedListener(
+                (x, y, widthDp) -> new SettingsStore().setVectorscopePlacement(x, y, widthDp));
+    }
+
+    private void setVectorscopeEnabled(boolean enabled) {
+        viewBinding.vectorscopeView.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        viewBinding.openGLVideoView.setScopeListening(viewBinding.vectorscopeView, enabled);
+        viewBinding.vectorscopeButton.setActivated(enabled);
+        new SettingsStore().setVectorscopeEnabled(enabled);
+    }
+
+    private void showVectorscopeSettings() {
+        SettingsStore settingsStore = new SettingsStore();
+        VectorscopeMode[] modes = VectorscopeMode.values();
+        VectorscopeZoom[] zooms = VectorscopeZoom.values();
+
+        List<ToolSettingsPopup.Choice> modeChoices = new ArrayList<>();
+        for (VectorscopeMode mode : modes) {
+            modeChoices.add(ToolSettingsPopup.Choice.text(getString(mode.getLabel())));
+        }
+        List<ToolSettingsPopup.Choice> zoomChoices = new ArrayList<>();
+        for (VectorscopeZoom zoom : zooms) {
+            zoomChoices.add(ToolSettingsPopup.Choice.text(getString(zoom.getLabel())));
+        }
+
+        ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.vectorscope_settings_title))
+                .addChoices(getString(R.string.vectorscope_settings_mode), modeChoices,
+                        settingsStore.getVectorscopeMode().ordinal(), index -> {
+                            settingsStore.setVectorscopeMode(modes[index]);
+                            viewBinding.vectorscopeView.setMode(modes[index]);
+                            showVectorscopeChange(settingsStore);
+                        })
+                .addChoices(getString(R.string.vectorscope_settings_zoom), zoomChoices,
+                        settingsStore.getVectorscopeZoom().ordinal(), index -> {
+                            settingsStore.setVectorscopeZoom(zooms[index]);
+                            viewBinding.vectorscopeView.setZoom(zooms[index]);
+                            showVectorscopeChange(settingsStore);
+                        });
+        showToolSettings(popup, viewBinding.vectorscopeButton);
+    }
+
+    /**
+     * Turns the vectorscope on to show a changed setting, or redraws it for a still picture.
+     */
+    private void showVectorscopeChange(SettingsStore settingsStore) {
+        if (!settingsStore.isVectorscopeEnabled()) {
+            setVectorscopeEnabled(true);
+        } else {
+            viewBinding.openGLVideoView.requestRender();
+        }
     }
 
     private void initializeToggleFocusAssistButton() {

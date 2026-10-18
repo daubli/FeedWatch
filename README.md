@@ -132,6 +132,17 @@ buttons remain. It can be enabled in the Settings.
 
 ---
 
+### Vectorscope
+
+- Small vectorscope over the picture, turned on with the **VEC** button: hue as the angle, saturation as the
+  distance from the middle (Rec. 709)
+- Targets for the 75% color bars and a skin tone line
+- Long-press the **VEC** button to draw the trace in **color** or **white** and to zoom **1×** or **2×**, which spreads
+  the low saturation of skin or log footage
+- Moved and resized like the waveform monitor, both can be open at the same time
+
+---
+
 ### Framing Guides
 
 - **Grid**: rule of thirds or a center cross

@@ -1,27 +1,28 @@
-package de.daubli.feedwatch.view.overlays.waveform;
+package de.daubli.feedwatch.view.overlays.scope;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import android.opengl.GLES20;
+import android.opengl.GLException;
 import android.os.SystemClock;
-import androidx.annotation.Nullable;
 import de.daubli.feedwatch.view.overlays.Overlay;
 
 /**
- * Draws nothing on screen: scales the video down into a small framebuffer and reads it back, so the waveform can be
- * computed on the CPU. Samples the composite texture before the other overlays, so zebra stripes and peaking edges
- * do not show up in the waveform.
+ * Draws nothing on screen: scales the video down into a small framebuffer and reads it back, so scopes like the
+ * waveform monitor and the vectorscope can be computed on the CPU. All scopes share one readback. Samples the
+ * composite texture before the other overlays, so zebra stripes and peaking edges do not show up in the scopes.
  */
-public class WaveformCapture extends Overlay {
+public class ScopeCapture extends Overlay {
 
     /**
      * Receives the scaled down picture on the GL thread. The buffer is reused for the next capture.
      */
     public interface Listener {
 
-        void onWaveformSamples(ByteBuffer rgba, int width, int height);
+        void onScopeSamples(ByteBuffer rgba, int width, int height);
     }
 
     // one column of the waveform per sample column
@@ -29,7 +30,7 @@ public class WaveformCapture extends Overlay {
 
     public static final int SAMPLE_HEIGHT = 180;
 
-    // a waveform is read, not watched frame by frame, so 30 updates per second are plenty
+    // a scope is read, not watched frame by frame, so 30 updates per second are plenty
     private static final long MIN_CAPTURE_INTERVAL_MS = 33;
 
     private static final float[] VERTICES = { -1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f };
@@ -42,8 +43,7 @@ public class WaveformCapture extends Overlay {
 
     private final ByteBuffer pixels;
 
-    @Nullable
-    private volatile Listener listener;
+    private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
 
     private long lastCapture;
 
@@ -61,15 +61,23 @@ public class WaveformCapture extends Overlay {
 
     private int fboTexture = 0;
 
-    public WaveformCapture() {
+    public ScopeCapture() {
         vertexBuffer = ByteBuffer.allocateDirect(VERTICES.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
         vertexBuffer.put(VERTICES).position(0);
         texCoordBuffer = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
         pixels = ByteBuffer.allocateDirect(SAMPLE_WIDTH * SAMPLE_HEIGHT * 4).order(ByteOrder.nativeOrder());
     }
 
-    public void setListener(@Nullable Listener listener) {
-        this.listener = listener;
+    /**
+     * @return whether any listener is left
+     */
+    public boolean setListening(Listener listener, boolean listening) {
+        if (listening) {
+            listeners.addIfAbsent(listener);
+        } else {
+            listeners.remove(listener);
+        }
+        return !listeners.isEmpty();
     }
 
     private void initGL() {
@@ -122,7 +130,7 @@ public class WaveformCapture extends Overlay {
         int status = GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         if (status != GLES20.GL_FRAMEBUFFER_COMPLETE) {
-            throw new RuntimeException("Waveform framebuffer not complete: " + status);
+            throw new GLException(status, "Scope framebuffer not complete: " + status);
         }
 
         initialized = true;
@@ -131,8 +139,7 @@ public class WaveformCapture extends Overlay {
     @Override
     public void draw(int videoTextureId, int videoRectLeft, int videoRectTop, int videoRectWidth, int videoRectHeight,
             int surfaceWidth, int surfaceHeight) {
-        Listener target = listener;
-        if (target == null || videoRectWidth <= 0 || videoRectHeight <= 0) {
+        if (listeners.isEmpty() || videoRectWidth <= 0 || videoRectHeight <= 0) {
             return;
         }
         long now = SystemClock.uptimeMillis();
@@ -185,8 +192,10 @@ public class WaveformCapture extends Overlay {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
 
-        pixels.rewind();
-        target.onWaveformSamples(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT);
+        for (Listener listener : listeners) {
+            pixels.rewind();
+            listener.onScopeSamples(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT);
+        }
     }
 
     private int createProgram(String vsCode, String fsCode) {
@@ -203,7 +212,7 @@ public class WaveformCapture extends Overlay {
         if (linkStatus[0] == 0) {
             String log = GLES20.glGetProgramInfoLog(prog);
             GLES20.glDeleteProgram(prog);
-            throw new RuntimeException("Program link failed: " + log);
+            throw new GLException(0, "Program link failed: " + log);
         }
 
         GLES20.glDeleteShader(vs);
@@ -221,7 +230,7 @@ public class WaveformCapture extends Overlay {
         if (compiled[0] == 0) {
             String log = GLES20.glGetShaderInfoLog(shader);
             GLES20.glDeleteShader(shader);
-            throw new RuntimeException("Shader compile failed: " + log);
+            throw new GLException(0, "Shader compile failed: " + log);
         }
         return shader;
     }

@@ -55,6 +55,7 @@
     <string name="tool_zebra">ZEBRA</string>
     <string name="tool_peaking">PEAK</string>
     <string name="tool_waveform">WFM</string>
+    <string name="tool_vectorscope">VEC</string>
     <string name="tool_tally">TALLY</string>
     <string name="tool_audio">AUDIO</string>
     <string name="audio_left">L</string>
@@ -67,6 +68,13 @@
     <string name="waveform_settings_mode">Mode</string>
     <string name="waveform_mode_luma">Luma</string>
     <string name="waveform_mode_rgb">RGB</string>
+    <string name="vectorscope_settings_title">Vectorscope</string>
+    <string name="vectorscope_settings_mode">Trace</string>
+    <string name="vectorscope_mode_color">Color</string>
+    <string name="vectorscope_mode_white">White</string>
+    <string name="vectorscope_settings_zoom">Zoom</string>
+    <string name="vectorscope_zoom_normal" translatable="false">1×</string>
+    <string name="vectorscope_zoom_double" translatable="false">2×</string>
     <string name="framing_settings_title">Framing</string>
     <string name="framing_settings_grid">Grid</string>
     <string name="framing_settings_frame_lines">Frame lines</string>

@@ -11,7 +11,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import de.daubli.feedwatch.ndi.FourCCType;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusAssistOverlay;
-import de.daubli.feedwatch.view.overlays.waveform.WaveformCapture;
+import de.daubli.feedwatch.view.overlays.scope.ScopeCapture;
 import de.daubli.feedwatch.view.overlays.zebra.ZebraOverlay;
 
 public class OpenGLVideoView extends GLSurfaceView {
@@ -22,7 +22,7 @@ public class OpenGLVideoView extends GLSurfaceView {
 
     private ZebraOverlay zebraOverlay;
 
-    private WaveformCapture waveformCapture;
+    private ScopeCapture scopeCapture;
 
     public OpenGLVideoView(@NonNull Context context) {
         super(context);
@@ -46,8 +46,8 @@ public class OpenGLVideoView extends GLSurfaceView {
         zebraOverlay = new ZebraOverlay();
         compositeRenderer.addOverlay(zebraOverlay);
 
-        waveformCapture = new WaveformCapture();
-        compositeRenderer.addOverlay(waveformCapture);
+        scopeCapture = new ScopeCapture();
+        compositeRenderer.addOverlay(scopeCapture);
 
         setRenderer(compositeRenderer);
         setRenderMode(RENDERMODE_WHEN_DIRTY);
@@ -120,18 +120,16 @@ public class OpenGLVideoView extends GLSurfaceView {
     }
 
     /**
-     * Turns the waveform capture on or off, the listener gets the scaled down picture on the GL thread.
+     * Adds or removes a scope, it gets the scaled down picture on the GL thread. The capture runs while any scope
+     * listens.
      */
-    public void setWaveformListener(@Nullable WaveformCapture.Listener listener) {
-        if (waveformCapture == null) {
+    public void setScopeListening(ScopeCapture.Listener listener, boolean listening) {
+        if (scopeCapture == null) {
             return;
         }
 
-        queueEvent(() -> {
-            waveformCapture.setListener(listener);
-            waveformCapture.setEnabled(listener != null);
-        });
-        // a still picture gets a waveform right away
+        queueEvent(() -> scopeCapture.setEnabled(scopeCapture.setListening(listener, listening)));
+        // a still picture gets its scope right away
         requestRender();
     }
 }

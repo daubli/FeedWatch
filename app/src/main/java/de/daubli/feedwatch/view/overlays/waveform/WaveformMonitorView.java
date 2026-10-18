@@ -10,33 +10,15 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.TypedValue;
-import android.view.Gravity;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
-import android.view.View;
-import android.view.ViewConfiguration;
-import android.view.ViewParent;
-import android.widget.FrameLayout;
 import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 import de.daubli.feedwatch.R;
+import de.daubli.feedwatch.view.overlays.scope.FloatingScopeView;
 
 /**
- * Small waveform monitor floating over the picture. It can be dragged with one finger and resized by pinching with
- * two, a tap is passed on as a click. Its place is kept as fractions of the free space, so it stays in the same
- * corner when the screen size changes.
- * <p>
- * Must be a child of a {@link FrameLayout}, it positions itself with margins.
+ * Small waveform monitor floating over the picture: one column per column of the picture, one row per code value.
  */
-public class WaveformMonitorView extends View implements WaveformCapture.Listener {
-
-    public interface OnPlacementChangedListener {
-
-        /**
-         * Called once a drag or pinch ends.
-         */
-        void onPlacementChanged(float xFraction, float yFraction, float widthDp);
-    }
+public class WaveformMonitorView extends FloatingScopeView {
 
     public static final float DEFAULT_X_FRACTION = 1f;
 
@@ -44,12 +26,8 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
 
     public static final float DEFAULT_WIDTH_DP = 260f;
 
-    private static final float MIN_WIDTH_DP = 140f;
-
     // height / width
     private static final float ASPECT = 0.6f;
-
-    private static final float EDGE_MARGIN_DP = 8f;
 
     // 8 bit code values, one row each
     private static final int LEVELS = 256;
@@ -61,29 +39,17 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
 
     private static final int[] GRATICULE_PERCENT = { 0, 25, 50, 75, 100 };
 
-    private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
     private final Paint graticulePaint = new Paint();
 
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private final Paint bitmapPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
 
-    private final RectF bounds = new RectF();
-
     private final RectF plot = new RectF();
-
-    private final float cornerRadius;
 
     private final float labelGutter;
 
     private final float plotInset;
-
-    private final float edgeMargin;
-
-    private final float touchSlop;
-
-    private final ScaleGestureDetector scaleDetector;
 
     private volatile WaveformMode mode = WaveformMode.LUMA;
 
@@ -96,53 +62,6 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
 
     private int[] backPixels;
 
-    // shared between the GL and UI thread, guarded by pixelLock
-    private final Object pixelLock = new Object();
-
-    private int[] pendingPixels;
-
-    private int pendingWidth;
-
-    private boolean pixelsChanged;
-
-    @Nullable
-    private Bitmap waveform;
-
-    // placement, as saved
-    private float xFraction = DEFAULT_X_FRACTION;
-
-    private float yFraction = DEFAULT_Y_FRACTION;
-
-    private float widthDp = DEFAULT_WIDTH_DP;
-
-    // placement in parent pixels
-    private float left;
-
-    private float top;
-
-    private float width;
-
-    @Nullable
-    private OnPlacementChangedListener placementListener;
-
-    private final OnLayoutChangeListener parentLayoutListener =
-            (v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
-                // listeners are called on every layout, the placement only depends on the size
-                if (r - l != oldR - oldL || b - t != oldB - oldT) {
-                    post(this::applyPlacement);
-                }
-            };
-
-    private float lastFocusX;
-
-    private float lastFocusY;
-
-    private float downX;
-
-    private float downY;
-
-    private boolean moved;
-
     public WaveformMonitorView(Context context) {
         this(context, null);
     }
@@ -152,14 +71,9 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
     }
 
     public WaveformMonitorView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
-        cornerRadius = dp(6);
+        super(context, attrs, defStyleAttr, ASPECT, DEFAULT_X_FRACTION, DEFAULT_Y_FRACTION, DEFAULT_WIDTH_DP);
         labelGutter = dp(20);
         plotInset = dp(6);
-        edgeMargin = dp(EDGE_MARGIN_DP);
-        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-
-        backgroundPaint.setColor(0xB3000000);
 
         graticulePaint.setColor(0x40FFFFFF);
         graticulePaint.setStrokeWidth(1f);
@@ -170,17 +84,6 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
         labelPaint.setTypeface(ResourcesCompat.getFont(context, R.font.public_sans_semibold));
         labelPaint.setTextAlign(Paint.Align.RIGHT);
 
-        scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-
-            @Override
-            public boolean onScale(ScaleGestureDetector detector) {
-                scaleBy(detector.getScaleFactor(), detector.getFocusX(), detector.getFocusY());
-                return true;
-            }
-        });
-        // a double tap and drag would fight with moving the monitor
-        scaleDetector.setQuickScaleEnabled(false);
-
         setContentDescription(context.getString(R.string.waveform_settings_title));
     }
 
@@ -188,58 +91,41 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
         this.mode = mode;
     }
 
-    public void setOnPlacementChangedListener(@Nullable OnPlacementChangedListener listener) {
-        this.placementListener = listener;
-    }
-
-    /**
-     * Places the monitor in the free space of its parent: 0 is the left or top edge, 1 the right or bottom one.
-     */
-    public void setPlacement(float xFraction, float yFraction, float widthDp) {
-        this.xFraction = clamp(xFraction, 0f, 1f);
-        this.yFraction = clamp(yFraction, 0f, 1f);
-        this.widthDp = widthDp;
-        applyPlacement();
-    }
-
-    // ------------------------------------------------------------
-    // Waveform
-    // ------------------------------------------------------------
-
     /**
      * Counts how many samples of each column have each code value and turns the counts into an image, one column
      * per sample column and one row per code value. Runs on the GL thread.
      */
     @Override
-    public void onWaveformSamples(ByteBuffer rgba, int sampleWidth, int sampleHeight) {
+    public void onScopeSamples(ByteBuffer rgba, int sampleWidth, int sampleHeight) {
         int sampleBytes = sampleWidth * sampleHeight * 4;
         int cells = sampleWidth * LEVELS;
         if (samples == null || samples.length != sampleBytes) {
             samples = new byte[sampleBytes];
             counts = new int[cells * 3];
             backPixels = new int[cells];
-            intensity = intensityTable(sampleHeight);
+            intensity = intensityTable(sampleHeight, INTENSITY_GAIN);
         }
         rgba.get(samples);
 
         WaveformMode currentMode = mode;
         Arrays.fill(counts, 0);
-        for (int i = 0, x = 0; i < sampleBytes; i += 4) {
-            int r = samples[i] & 0xFF;
-            int g = samples[i + 1] & 0xFF;
-            int b = samples[i + 2] & 0xFF;
-            // row 0 is the top, the highest code value
-            if (currentMode == WaveformMode.LUMA) {
-                // Rec. 709 weights, scaled to 256
-                int luma = (54 * r + 183 * g + 19 * b) >> 8;
-                counts[(LEVELS - 1 - luma) * sampleWidth + x]++;
-            } else {
-                counts[(LEVELS - 1 - r) * sampleWidth + x]++;
-                counts[cells + (LEVELS - 1 - g) * sampleWidth + x]++;
-                counts[2 * cells + (LEVELS - 1 - b) * sampleWidth + x]++;
-            }
-            if (++x == sampleWidth) {
-                x = 0;
+        for (int row = 0; row < sampleHeight; row++) {
+            int rowStart = row * sampleWidth * 4;
+            for (int x = 0; x < sampleWidth; x++) {
+                int i = rowStart + x * 4;
+                int r = samples[i] & 0xFF;
+                int g = samples[i + 1] & 0xFF;
+                int b = samples[i + 2] & 0xFF;
+                // row 0 of the waveform is the top, the highest code value
+                if (currentMode == WaveformMode.LUMA) {
+                    // Rec. 709 weights, scaled to 256
+                    int luma = (54 * r + 183 * g + 19 * b) >> 8;
+                    counts[(LEVELS - 1 - luma) * sampleWidth + x]++;
+                } else {
+                    counts[(LEVELS - 1 - r) * sampleWidth + x]++;
+                    counts[cells + (LEVELS - 1 - g) * sampleWidth + x]++;
+                    counts[2 * cells + (LEVELS - 1 - b) * sampleWidth + x]++;
+                }
             }
         }
 
@@ -253,25 +139,7 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
             }
         }
 
-        synchronized (pixelLock) {
-            int[] swap = pendingPixels;
-            pendingPixels = backPixels;
-            pendingWidth = sampleWidth;
-            pixelsChanged = true;
-            backPixels = swap != null && swap.length == cells ? swap : new int[cells];
-        }
-        postInvalidateOnAnimation();
-    }
-
-    /**
-     * Brightness 0..255 for each number of samples on one point: a single sample is already visible, many saturate.
-     */
-    private static int[] intensityTable(int maxCount) {
-        int[] table = new int[maxCount + 1];
-        for (int c = 1; c <= maxCount; c++) {
-            table[c] = (int) Math.round(255 * (1 - Math.exp(-INTENSITY_GAIN * c)));
-        }
-        return table;
+        backPixels = publishPixels(backPixels, sampleWidth, LEVELS);
     }
 
     /**
@@ -290,12 +158,7 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-
-        bounds.set(0, 0, getWidth(), getHeight());
-        canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, backgroundPaint);
-
+    protected void onDrawScope(Canvas canvas, @Nullable Bitmap image) {
         plot.set(labelGutter, plotInset, getWidth() - plotInset, getHeight() - plotInset);
         if (plot.width() <= 0 || plot.height() <= 0) {
             return;
@@ -310,198 +173,8 @@ public class WaveformMonitorView extends View implements WaveformCapture.Listene
             }
         }
 
-        synchronized (pixelLock) {
-            if (pixelsChanged) {
-                pixelsChanged = false;
-                if (waveform == null || waveform.getWidth() != pendingWidth) {
-                    waveform = Bitmap.createBitmap(pendingWidth, LEVELS, Bitmap.Config.ARGB_8888);
-                }
-                waveform.setPixels(pendingPixels, 0, pendingWidth, 0, 0, pendingWidth, LEVELS);
-            }
+        if (image != null) {
+            canvas.drawBitmap(image, null, plot, bitmapPaint);
         }
-        if (waveform != null) {
-            canvas.drawBitmap(waveform, null, plot, bitmapPaint);
-        }
-    }
-
-    // ------------------------------------------------------------
-    // Moving and resizing
-    // ------------------------------------------------------------
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        // work in parent coordinates, the view itself moves under the fingers
-        MotionEvent parentEvent = MotionEvent.obtain(event);
-        parentEvent.offsetLocation(getLeft(), getTop());
-        scaleDetector.onTouchEvent(parentEvent);
-        handleDrag(parentEvent);
-        parentEvent.recycle();
-        return true;
-    }
-
-    private void handleDrag(MotionEvent event) {
-        int action = event.getActionMasked();
-
-        // the focus is the middle of all fingers still down, so lifting one of two does not make the monitor jump
-        int liftedIndex = action == MotionEvent.ACTION_POINTER_UP ? event.getActionIndex() : -1;
-        float sumX = 0;
-        float sumY = 0;
-        int fingers = 0;
-        for (int i = 0; i < event.getPointerCount(); i++) {
-            if (i != liftedIndex) {
-                sumX += event.getX(i);
-                sumY += event.getY(i);
-                fingers++;
-            }
-        }
-        if (fingers == 0) {
-            return;
-        }
-        float focusX = sumX / fingers;
-        float focusY = sumY / fingers;
-
-        switch (action) {
-            case MotionEvent.ACTION_DOWN:
-                downX = focusX;
-                downY = focusY;
-                moved = false;
-                ViewParent parent = getParent();
-                if (parent != null) {
-                    parent.requestDisallowInterceptTouchEvent(true);
-                }
-                break;
-            case MotionEvent.ACTION_POINTER_DOWN:
-            case MotionEvent.ACTION_POINTER_UP:
-                // a pinch is never a tap
-                moved = true;
-                break;
-            case MotionEvent.ACTION_MOVE:
-                if (!moved && Math.hypot(focusX - downX, focusY - downY) > touchSlop) {
-                    moved = true;
-                }
-                if (moved) {
-                    moveBy(focusX - lastFocusX, focusY - lastFocusY);
-                }
-                break;
-            case MotionEvent.ACTION_UP:
-                if (moved) {
-                    savePlacement();
-                } else {
-                    performClick();
-                }
-                break;
-            case MotionEvent.ACTION_CANCEL:
-                if (moved) {
-                    savePlacement();
-                }
-                break;
-            default:
-                break;
-        }
-        lastFocusX = focusX;
-        lastFocusY = focusY;
-    }
-
-    @Override
-    public boolean performClick() {
-        return super.performClick();
-    }
-
-    private void moveBy(float dx, float dy) {
-        left += dx;
-        top += dy;
-        clampAndLayout();
-    }
-
-    private void scaleBy(float factor, float focusX, float focusY) {
-        float newWidth = clampWidth(width * factor);
-        // keep the point between the fingers in place
-        float applied = newWidth / width;
-        left = focusX - (focusX - left) * applied;
-        top = focusY - (focusY - top) * applied;
-        width = newWidth;
-        clampAndLayout();
-    }
-
-    private void applyPlacement() {
-        View parent = (View) getParent();
-        if (parent == null || parent.getWidth() == 0 || parent.getHeight() == 0) {
-            return;
-        }
-        width = clampWidth(dp(widthDp));
-        left = edgeMargin + xFraction * freeWidth(parent);
-        top = edgeMargin + yFraction * freeHeight(parent);
-        clampAndLayout();
-    }
-
-    private void savePlacement() {
-        View parent = (View) getParent();
-        if (parent == null) {
-            return;
-        }
-        float freeWidth = freeWidth(parent);
-        float freeHeight = freeHeight(parent);
-        xFraction = freeWidth > 0 ? clamp((left - edgeMargin) / freeWidth, 0f, 1f) : 0f;
-        yFraction = freeHeight > 0 ? clamp((top - edgeMargin) / freeHeight, 0f, 1f) : 0f;
-        widthDp = width / getResources().getDisplayMetrics().density;
-        if (placementListener != null) {
-            placementListener.onPlacementChanged(xFraction, yFraction, widthDp);
-        }
-    }
-
-    private float freeWidth(View parent) {
-        return parent.getWidth() - 2 * edgeMargin - width;
-    }
-
-    private float freeHeight(View parent) {
-        return parent.getHeight() - 2 * edgeMargin - width * ASPECT;
-    }
-
-    private float clampWidth(float requested) {
-        View parent = (View) getParent();
-        if (parent == null || parent.getWidth() == 0) {
-            return requested;
-        }
-        float max = Math.min(parent.getWidth() - 2 * edgeMargin, (parent.getHeight() - 2 * edgeMargin) / ASPECT);
-        float min = Math.min(dp(MIN_WIDTH_DP), max);
-        return clamp(requested, min, max);
-    }
-
-    private void clampAndLayout() {
-        View parent = (View) getParent();
-        if (parent == null) {
-            return;
-        }
-        left = clamp(left, edgeMargin, Math.max(edgeMargin, edgeMargin + freeWidth(parent)));
-        top = clamp(top, edgeMargin, Math.max(edgeMargin, edgeMargin + freeHeight(parent)));
-
-        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) getLayoutParams();
-        params.gravity = Gravity.TOP | Gravity.START;
-        params.width = Math.round(width);
-        params.height = Math.round(width * ASPECT);
-        params.leftMargin = Math.round(left);
-        params.topMargin = Math.round(top);
-        setLayoutParams(params);
-    }
-
-    @Override
-    protected void onAttachedToWindow() {
-        super.onAttachedToWindow();
-        ((View) getParent()).addOnLayoutChangeListener(parentLayoutListener);
-        applyPlacement();
-    }
-
-    @Override
-    protected void onDetachedFromWindow() {
-        ((View) getParent()).removeOnLayoutChangeListener(parentLayoutListener);
-        super.onDetachedFromWindow();
-    }
-
-    private static float clamp(float value, float min, float max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
-    private float dp(float value) {
-        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics());
     }
 }
