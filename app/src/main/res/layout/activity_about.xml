@@ -52,6 +52,8 @@
         <TextView
                 android:id="@+id/ndiNotice"
                 android:layout_width="match_parent"
+                android:autoLink="web"
+                android:textColorLink="@color/fw_accent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
                 android:background="@drawable/bg_settings_card"

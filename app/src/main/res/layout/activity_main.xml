@@ -108,4 +108,6 @@
                     android:textSize="14sp"/>
         </LinearLayout>
     </FrameLayout>
+
+    <include layout="@layout/view_ndi_notice"/>
 </LinearLayout>

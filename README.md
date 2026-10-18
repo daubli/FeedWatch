@@ -1,6 +1,6 @@
 # FeedWatch
 
-Android App to view [NDI®](http://ndi.tv/)- or UVC (**U**SB **V**ideo **C**lass Device) Feed on an Android mobile phone.
+Android App to view [NDI®](https://ndi.video/)- or UVC (**U**SB **V**ideo **C**lass Device) Feed on an Android mobile phone.
 
 This project was renamed from NDIMonitor to FeedWatch to avoid confusion with the official 
 NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vizrt ;)
@@ -202,6 +202,6 @@ work stable and that there are some ui or- performance glitches.
 
 ## License
 
-NDI® is a registered trademark of the Vizrt Group. Also visit http://ndi.video for details.
+NDI® is a registered trademark of Vizrt NDI AB. Also visit https://ndi.video/ for details.
 
 This project is licensed under the APACHE License 2.0. See included [LICENSE](LICENSE) file.
