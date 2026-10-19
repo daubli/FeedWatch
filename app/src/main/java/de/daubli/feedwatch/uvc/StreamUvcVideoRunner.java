@@ -92,6 +92,7 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
         this.openGLVideoView = binding.openGLVideoView;
         this.framingHelperOverlayView = binding.framingHelperOverlayView;
         this.activity = activity;
+        openGLVideoView.setOnVideoRectChangedListener(framingHelperOverlayView::setFramingRect);
     }
 
     @Override
@@ -153,7 +154,6 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
                 // Push to GL thread via OpenGLVideoView queueEvent()
                 openGLVideoView.updateFrame(f.rgba, f.width, f.height, FourCCType.RGBA);
                 shownFrames++;
-                framingHelperOverlayView.setFramingRect(openGLVideoView.getVideoRect());
                 activity.onVideoFormat(f.width, f.height, measureFrameRate(), "MJPEG");
             }
 

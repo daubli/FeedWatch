@@ -16,6 +16,15 @@ import de.daubli.feedwatch.ndi.FourCCType;
 
 public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
+    /**
+     * Told when the rect the video is drawn in changes: with the first frame, a new frame size or a new surface size.
+     */
+    public interface VideoRectListener {
+
+        /** Called on the GL thread or the thread submitting frames. */
+        void onVideoRectChanged(Rect videoRect);
+    }
+
     // ------------------------------------------------------------
     // Constants / static data
     // ------------------------------------------------------------
@@ -56,6 +65,8 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     /** Rect in surface pixel coords where the video is actually drawn (for overlays). */
     private Rect videoRect = new Rect();
+
+    private volatile VideoRectListener videoRectListener;
 
     // the frame in the texture, drawn again when a render is requested without a new frame (GL thread only)
     private FourCCType drawnType;
@@ -140,7 +151,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
             frameAvailable = true;
 
             if (surfaceWidth > 0 && surfaceHeight > 0) {
-                videoRect = updateVerticesAndGetVideoRect(surfaceWidth, surfaceHeight, frameWidth, frameHeight);
+                setVideoRect(updateVerticesAndGetVideoRect(surfaceWidth, surfaceHeight, frameWidth, frameHeight));
             }
         }
     }
@@ -148,6 +159,22 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
     public Rect getVideoRect() {
         synchronized (lock) {
             return new Rect(videoRect);
+        }
+    }
+
+    public void setVideoRectListener(VideoRectListener listener) {
+        videoRectListener = listener;
+    }
+
+    // caller holds the lock
+    private void setVideoRect(Rect rect) {
+        if (rect.equals(videoRect)) {
+            return;
+        }
+        videoRect = rect;
+        VideoRectListener listener = videoRectListener;
+        if (listener != null) {
+            listener.onVideoRectChanged(new Rect(rect));
         }
     }
 
@@ -200,7 +227,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
         synchronized (lock) {
             if (frameWidth > 0 && frameHeight > 0) {
-                videoRect = updateVerticesAndGetVideoRect(surfaceWidth, surfaceHeight, frameWidth, frameHeight);
+                setVideoRect(updateVerticesAndGetVideoRect(surfaceWidth, surfaceHeight, frameWidth, frameHeight));
             }
         }
     }

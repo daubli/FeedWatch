@@ -119,6 +119,10 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         this.videoView = binding.openGLVideoView;
         this.framingHelperOverlayView = binding.framingHelperOverlayView;
         this.tallyOverlayView = binding.tallyOverlayView;
+        videoView.setOnVideoRectChangedListener(videoRect -> {
+            framingHelperOverlayView.setFramingRect(videoRect);
+            tallyOverlayView.setVideoRect(videoRect);
+        });
     }
 
     @Override
@@ -328,7 +332,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
                     videoView.updateFrame(frame.getData(), width, height, fourCCType, () -> recycleFrame(frame));
                     shownFrames++;
-                    framingHelperOverlayView.setFramingRect(videoView.getVideoRect());
                     activity.onVideoFormat(width, height, frameRate, fourCCType.name());
 
                 } catch (UnsupportedOperationException e) {
@@ -439,7 +442,6 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                         if (tally != null) {
                             mainHandler.post(() -> {
                                 tallyOverlayView.updateTally(tally.onProgram, tally.onPreview);
-                                tallyOverlayView.setVideoRect(videoView.getVideoRect());
                                 activity.onTallyState(tally.onProgram, tally.onPreview);
                             });
                         }

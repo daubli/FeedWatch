@@ -77,6 +77,15 @@ public class OpenGLVideoView extends GLSurfaceView {
         return videoRenderer.getVideoRect();
     }
 
+    /**
+     * Listens for changes of the rect the video is drawn in, on the main thread. Overlays drawn over the video
+     * follow it this way, also when no new frame arrives, e.g. for a still image or after the surface was resized.
+     */
+    public void setOnVideoRectChangedListener(@Nullable GLVideoRenderer.VideoRectListener listener) {
+        videoRenderer.setVideoRectListener(listener == null ? null
+                : videoRect -> post(() -> listener.onVideoRectChanged(videoRect)));
+    }
+
     @Override
     public boolean performClick() {
         super.performClick();
