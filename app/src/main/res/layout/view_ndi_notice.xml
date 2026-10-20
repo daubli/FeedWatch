@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NDI asks for this statement and a link to ndi.video near every place where NDI sources are chosen -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:autoLink="web"
+          android:gravity="center"
+          android:lineSpacingMultiplier="1.2"
+          android:paddingStart="@dimen/fw_screen_padding"
+          android:paddingTop="8dp"
+          android:paddingEnd="@dimen/fw_screen_padding"
+          android:paddingBottom="12dp"
+          android:text="@string/ndi_notice"
+          android:textColor="@color/fw_text_disabled"
+          android:textColorLink="@color/fw_text_secondary"
+          android:textSize="12sp"/>
