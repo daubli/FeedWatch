@@ -42,6 +42,7 @@
     <string name="settings_default_source_remove">Remove default source</string>
     <string name="settings_save">Save</string>
     <string name="about_version">Version %1$s</string>
+    <string name="about_build">Build %1$s</string>
 
     <!-- Stream HUD -->
     <string name="hud_close">Close stream</string>

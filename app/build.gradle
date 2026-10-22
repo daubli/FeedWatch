@@ -2,6 +2,17 @@ plugins {
     id 'com.android.application'
 }
 
+// first 16 characters of the HEAD commit, shown as build identifier on the About page
+def gitCommit() {
+    try {
+        def process = ['git', 'rev-parse', 'HEAD'].execute(null, rootDir)
+        def hash = process.text.trim()
+        return process.waitFor() == 0 && hash ? hash.take(16) : 'unknown'
+    } catch (Exception ignored) {
+        return 'unknown'
+    }
+}
+
 android {
     compileSdk 33
 
@@ -28,6 +39,7 @@ android {
         targetSdk 33
         versionCode 3
         versionName "1.2.0"
+        buildConfigField "String", "GIT_COMMIT", "\"${gitCommit()}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

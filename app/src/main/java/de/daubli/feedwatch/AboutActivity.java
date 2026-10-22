@@ -16,5 +16,8 @@ public class AboutActivity extends AppCompatActivity {
 
         TextView versionText = findViewById(R.id.versionText);
         versionText.setText(getString(R.string.about_version, BuildConfig.VERSION_NAME));
+
+        TextView buildText = findViewById(R.id.buildText);
+        buildText.setText(getString(R.string.about_build, BuildConfig.GIT_COMMIT));
     }
 }
