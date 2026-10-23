@@ -16,6 +16,7 @@ import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputLayout;
@@ -158,7 +159,8 @@ public class SettingsActivity extends AppCompatActivity {
      * Adds the dot after a full block of three digits, so only the numbers need to be typed. A dot typed right
      * after it and a fourth digit in the last block are dropped.
      */
-    private static void insertAddressDot(Editable text) {
+    @VisibleForTesting
+    static void insertAddressDot(Editable text) {
         String address = text.toString();
         if (address.endsWith("..")) {
             text.delete(address.length() - 1, address.length());

@@ -10,6 +10,7 @@ import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import de.daubli.feedwatch.R;
 import de.daubli.feedwatch.ndi.NdiSource;
 
@@ -63,7 +64,8 @@ public class SourceListAdapter extends ArrayAdapter<VideoSource> {
     }
 
     // NDI names look like "MACHINE (Source)": show the source big and the machine below it
-    private static void bindNdiName(NdiSource source, TextView title, TextView subtitle) {
+    @VisibleForTesting
+    static void bindNdiName(NdiSource source, TextView title, TextView subtitle) {
         String name = source.getSourceName();
         String address = source.getUrlAddress();
         int open = name.indexOf(" (");

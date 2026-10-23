@@ -7,6 +7,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
+import androidx.annotation.VisibleForTesting;
 
 /**
  * Framing guides over the video: a composition grid, frame lines for an aspect ratio and a safe area. With frame
@@ -114,7 +115,8 @@ public class FramingHelperOverlayView extends View {
     /**
      * The largest rect with the given aspect ratio, centered in the bounds.
      */
-    private static void fitAspectRatio(RectF bounds, float aspectRatio, RectF out) {
+    @VisibleForTesting
+    static void fitAspectRatio(RectF bounds, float aspectRatio, RectF out) {
         float width = bounds.width();
         float height = width / aspectRatio;
         if (height > bounds.height()) {
