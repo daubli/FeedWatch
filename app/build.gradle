@@ -37,8 +37,8 @@ android {
         applicationId "de.daubli.feedwatch"
         minSdk 25
         targetSdk 33
-        versionCode 3
-        versionName "1.2.0"
+        versionCode 4
+        versionName "1.2.1"
         buildConfigField "String", "GIT_COMMIT", "\"${gitCommit()}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
