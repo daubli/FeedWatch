@@ -156,6 +156,20 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         }
     }
 
+    /** Drops the frame handed in but not uploaded yet; its onConsumed runs. The last drawn frame stays. */
+    public void discardPendingFrame() {
+        final Runnable consumedCallback;
+        synchronized (lock) {
+            consumedCallback = pendingConsumedCallback;
+            pendingConsumedCallback = null;
+            pendingFrame = null;
+            frameAvailable = false;
+        }
+        if (consumedCallback != null) {
+            consumedCallback.run();
+        }
+    }
+
     public Rect getVideoRect() {
         synchronized (lock) {
             return new Rect(videoRect);
@@ -182,6 +196,9 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         // a new surface has a new, empty texture
         drawnType = null;
+        texW = -1;
+        texH = -1;
+        texType = null;
 
         // Blending (leave enabled only if you actually render alpha / overlays; otherwise can be disabled)
         GLES20.glEnable(GLES20.GL_BLEND);

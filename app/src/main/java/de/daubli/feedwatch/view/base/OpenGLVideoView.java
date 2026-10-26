@@ -1,6 +1,8 @@
 package de.daubli.feedwatch.view.base;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import android.content.Context;
 import android.graphics.PixelFormat;
@@ -71,6 +73,21 @@ public class OpenGLVideoView extends GLSurfaceView {
 
         queueEvent(() -> videoRenderer.render(buffer, frameWidth, frameHeight, fourCCType, onConsumed));
         requestRender();
+    }
+
+    /**
+     * Drops a frame that was handed in but not drawn yet, running its onConsumed. Done on the GL thread, so no
+     * upload of it is in progress afterwards. Blocks, not to be called on the main thread.
+     *
+     * @return false if the GL thread did not get to it in time, e.g. because it already ended
+     */
+    public boolean discardPendingFrame(long timeoutMillis) throws InterruptedException {
+        CountDownLatch discarded = new CountDownLatch(1);
+        queueEvent(() -> {
+            videoRenderer.discardPendingFrame();
+            discarded.countDown();
+        });
+        return discarded.await(timeoutMillis, TimeUnit.MILLISECONDS);
     }
 
     public Rect getVideoRect() {

@@ -90,6 +90,9 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private volatile boolean running = true;
 
+    // set by stopStream(): the activity stays open and a failure afterwards must not close it
+    private volatile boolean stopped;
+
     private boolean firstFramePending = true;
 
     private Thread videoCaptureThread;
@@ -163,6 +166,16 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     @Override
     public void shutdown() {
+        release(true);
+    }
+
+    @Override
+    public void stopStream() {
+        stopped = true;
+        release(false);
+    }
+
+    private void release(boolean finishActivity) {
         // idempotent stop
         running = false;
 
@@ -182,13 +195,23 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             joinThread(tallyCaptureThread);
             joinThread(videoCaptureThread);
 
+            // A frame not drawn yet would be drawn from freed memory once the surface is back, e.g. after the
+            // screen was off. Handed back, it is released with the others.
+            try {
+                videoView.discardPendingFrame(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
             mainHandler.post(() -> {
                 // the frames use the frame sync, so they go first
                 safeCloseAudioPlayer();
                 safeReleaseVideoFrames();
                 safeCloseFrameSync();
                 safeCloseReceiver();
-                activity.finish();
+                if (finishActivity) {
+                    activity.finish();
+                }
             });
         }, "NDI-Shutdown").start();
     }
@@ -466,7 +489,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     }
 
     private void failUnsupportedFormat(int fourCC, UnsupportedOperationException e) {
-        if (!renderFailed.compareAndSet(false, true)) {
+        // stopStream() released everything already, and the view may belong to the next stream
+        if (stopped || !renderFailed.compareAndSet(false, true)) {
             return;
         }
 
@@ -489,7 +513,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     }
 
     private void failWithMessage(String message) {
-        if (!renderFailed.compareAndSet(false, true)) {
+        // stopStream() released everything already, and the view may belong to the next stream
+        if (stopped || !renderFailed.compareAndSet(false, true)) {
             return;
         }
 
