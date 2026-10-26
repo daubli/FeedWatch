@@ -11,12 +11,6 @@ public class ZebraOverlay extends Overlay {
 
     public static final float DEFAULT_THRESHOLD_IRE = 95f;
 
-    private static final float Y8_BLACK_LIMITED = 16f;
-
-    private static final float Y8_WHITE_LIMITED = 235f;
-
-    private static final float Y8_RANGE_LIMITED = (Y8_WHITE_LIMITED - Y8_BLACK_LIMITED); // 219
-
     private final FloatBuffer vertexBuffer;
 
     private final FloatBuffer texCoordBuffer;
@@ -45,11 +39,6 @@ public class ZebraOverlay extends Overlay {
 
     //Settings
 
-    // 8 bit range mode
-    private boolean limitedRange = true;
-
-    private float thresholdIre = DEFAULT_THRESHOLD_IRE;
-
     // normalized 0..1 threshold actually used in shader
     private float thresholdYPrime = 0f;
 
@@ -64,35 +53,16 @@ public class ZebraOverlay extends Overlay {
     public ZebraOverlay() {
         vertexBuffer = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
         texCoordBuffer = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
-        setThresholdIre(DEFAULT_THRESHOLD_IRE); // sets thresholdYPrime using current range mode
-    }
-
-    /** Set whether IRE mapping uses limited-range (16..235) or full-range (0..255). */
-    public void setLimitedRange(boolean limitedRange) {
-        this.limitedRange = limitedRange;
-        // Re-apply the threshold, its code value depends on the range
-        setThresholdIre(thresholdIre);
+        setThresholdIre(DEFAULT_THRESHOLD_IRE);
     }
 
     /**
-     * Set threshold in IRE (0..100).
-     *
-     * LIMITED range (studio swing, typical video):
-     *   code = 16 + (IRE/100) * 219
-     *   thresholdYPrime = code / 255
-     *
-     * FULL range:
-     *   thresholdYPrime = IRE/100
+     * Set threshold in IRE (0..100). The video is rendered in full range for every source (limited range
+     * NDI video is expanded by the video shader), so 0 IRE is black (0.0) and 100 IRE is white (1.0).
      */
     public void setThresholdIre(float ire) {
         float clamped = Math.max(0f, Math.min(100f, ire));
-        this.thresholdIre = clamped;
-        if (limitedRange) {
-            float code = Y8_BLACK_LIMITED + (clamped / 100f) * Y8_RANGE_LIMITED; // 16..235
-            this.thresholdYPrime = code / 255f;
-        } else {
-            this.thresholdYPrime = clamped / 100f;
-        }
+        this.thresholdYPrime = clamped / 100f;
     }
 
     private void initGL() {
@@ -120,8 +90,8 @@ public class ZebraOverlay extends Overlay {
                         "varying vec2 vTexCoord;" +
                         "void main() {" +
                         "  vec3 rgb = texture2D(uTexture, vTexCoord).rgb;" +
-                        // Y' approx from RGB; assumes RGB is already in display/video encoding (gamma-ish).
-                        "  float yprime = dot(rgb, vec3(0.299, 0.587, 0.114));" +
+                        // Y' from gamma encoded RGB with Rec. 709 weights, like the waveform and the vectorscope
+                        "  float yprime = dot(rgb, vec3(0.2126, 0.7152, 0.0722));" +
                         "  if (yprime < uThreshold) {" +
                         "    gl_FragColor = vec4(0.0);" +
                         "    return;" +

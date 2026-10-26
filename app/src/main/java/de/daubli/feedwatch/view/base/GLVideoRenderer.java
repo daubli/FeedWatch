@@ -73,6 +73,8 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     private int drawnWidth;
 
+    private int drawnHeight;
+
     // ------------------------------------------------------------
     // GL resources
     // ------------------------------------------------------------
@@ -102,6 +104,8 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
     private int uyvyTexSamplerLoc;
 
     private int uyvyFrameWidthLoc;
+
+    private int uyvyYuvToRgbLoc;
 
     // ------------------------------------------------------------
     // CPU-side buffers
@@ -206,6 +210,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         texLocUyvy = GLES20.glGetAttribLocation(programUyvy, "aTexCoord");
         uyvyTexSamplerLoc = GLES20.glGetUniformLocation(programUyvy, "uTex");
         uyvyFrameWidthLoc = GLES20.glGetUniformLocation(programUyvy, "uFrameWidth");
+        uyvyYuvToRgbLoc = GLES20.glGetUniformLocation(programUyvy, "uYuvToRgb");
 
         // Texture setup
         int[] tex = new int[1];
@@ -264,7 +269,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         if (frame == null) {
             // an overlay changed: the caller cleared the target, so the last frame has to be drawn again
             if (drawnType != null) {
-                draw(drawnType, drawnWidth);
+                draw(drawnType, drawnWidth, drawnHeight);
             }
             return;
         }
@@ -275,7 +280,8 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         }
         drawnType = type;
         drawnWidth = w;
-        draw(type, w);
+        drawnHeight = h;
+        draw(type, w, h);
     }
 
     private void uploadFrame(ByteBuffer frame, FourCCType type, int w, int h) {
@@ -300,7 +306,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
                 frame);
     }
 
-    private void draw(FourCCType type, int frameW) {
+    private void draw(FourCCType type, int frameW, int frameH) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
         // Bind texture unit 0 (samplers set to 0). Binding is cheap; do it explicitly.
@@ -326,6 +332,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
                 setCommonAttribs(posLocUyvy, texLocUyvy);
                 GLES20.glUniform1i(uyvyTexSamplerLoc, 0);
                 GLES20.glUniform1f(uyvyFrameWidthLoc, (float) frameW);
+                GLES20.glUniformMatrix3fv(uyvyYuvToRgbLoc, 1, false, yuvToRgbMatrix(frameW, frameH), 0);
                 break;
         }
 
