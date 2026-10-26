@@ -788,8 +788,9 @@ public class StreamVideoActivity extends AppCompatActivity {
         dismissToolSettings();
         dismissStats();
 
+        // The screen going off pauses the activity too. It stays open and onResume connects again.
         if (runner != null) {
-            runner.shutdown();
+            runner.stopStream();
             runner = null;
         }
     }

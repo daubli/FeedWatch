@@ -212,12 +212,16 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     @Override
     public void shutdown() {
+        stopStream();
+        activity.finish();
+    }
+
+    @Override
+    public void stopStream() {
         running = false;
         captureManager.stop();
 
         mainHandler.removeCallbacks(renderRunnable);
         decodeExecutor.shutdownNow();
-
-        activity.finish();
     }
 }
