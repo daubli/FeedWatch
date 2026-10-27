@@ -146,6 +146,7 @@ public class StreamVideoActivity extends AppCompatActivity {
     private void initSavedState() {
         SettingsStore settingsStore = new SettingsStore();
         viewBinding.openGLVideoView.setFocusPeakingColor(settingsStore.getFocusPeakingColor().getColor());
+        viewBinding.openGLVideoView.setFocusPeakingSensitivity(settingsStore.getFocusPeakingSensitivity());
         viewBinding.openGLVideoView.setZebraThreshold(settingsStore.getZebraThreshold());
         applyFramingGuides(settingsStore);
         viewBinding.waveformMonitorView.setMode(settingsStore.getWaveformMode());
@@ -420,6 +421,16 @@ public class StreamVideoActivity extends AppCompatActivity {
                             settingsStore.setFocusPeakingColor(colors[index]);
                             viewBinding.openGLVideoView.setFocusPeakingColor(colors[index].getColor());
                             // the new color is only visible with peaking on
+                            if (!settingsStore.isFocusAssistEnabled()) {
+                                setFocusAssistEnabled(true);
+                            }
+                        })
+                .addSlider(getString(R.string.peaking_settings_sensitivity), 0, 100,
+                        settingsStore.getFocusPeakingSensitivity(), value -> getString(R.string.percent_value, value),
+                        value -> {
+                            settingsStore.setFocusPeakingSensitivity(value);
+                            viewBinding.openGLVideoView.setFocusPeakingSensitivity(value);
+                            // the marked edges show the sensitivity, so they are needed while setting it
                             if (!settingsStore.isFocusAssistEnabled()) {
                                 setFocusAssistEnabled(true);
                             }

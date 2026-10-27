@@ -180,6 +180,21 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         }
     }
 
+    /**
+     * Width of the last frame handed in, in pixels of the video, 0 before the first.
+     */
+    public int getFrameWidth() {
+        synchronized (lock) {
+            return frameWidth;
+        }
+    }
+
+    public int getFrameHeight() {
+        synchronized (lock) {
+            return frameHeight;
+        }
+    }
+
     public void setVideoRectListener(VideoRectListener listener) {
         videoRectListener = listener;
     }

@@ -30,7 +30,8 @@ monitoring tools. The latest APK is on the [releases page](https://github.com/da
 
 Tap a tool button to turn the tool on or off, long-press it for its settings.
 
-- **Focus peaking**: sharp edges in red, yellow or blue, sensitivity fixed at 70%
+- **Focus peaking**: marks edges by their sharpness, not by their contrast, in red, yellow or blue, with adjustable
+  sensitivity
 - **Zebra**: stripes above a threshold from 50 to 100 IRE, 95 IRE by default
 - **Waveform monitor**: luma or RGB, drag to move it, pinch to resize it
 - **Vectorscope**: Rec. 709 with targets for the 75% color bars and a skin tone line, trace in color or white, zoom 1×

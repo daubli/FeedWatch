@@ -9,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import de.daubli.feedwatch.view.overlays.focusassist.FocusAssistOverlay;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
 import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingGrid;
@@ -41,6 +42,9 @@ public class SettingsStore {
     private static final String FOCUS_ASSIST_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.focusassist.enabled";
 
     private static final String FOCUS_PEAKING_COLOR_KEY = "de.daubli.feedwatch.view.overlays.focusassist.color";
+
+    private static final String FOCUS_PEAKING_SENSITIVITY_KEY =
+            "de.daubli.feedwatch.view.overlays.focusassist.sensitivity";
 
     private static final String ZEBRA_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.zebra.enabled";
 
@@ -226,6 +230,19 @@ public class SettingsStore {
     public void setFocusPeakingColor(FocusPeakingColor color) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putString(FOCUS_PEAKING_COLOR_KEY, color.name());
+        editor.apply();
+    }
+
+    /**
+     * How soft an edge may be to still be marked by focus peaking, in percent.
+     */
+    public int getFocusPeakingSensitivity() {
+        return sharedPreferences.getInt(FOCUS_PEAKING_SENSITIVITY_KEY, FocusAssistOverlay.DEFAULT_SENSITIVITY);
+    }
+
+    public void setFocusPeakingSensitivity(int percent) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(FOCUS_PEAKING_SENSITIVITY_KEY, percent);
         editor.apply();
     }
 

@@ -127,6 +127,18 @@ public class OpenGLVideoView extends GLSurfaceView {
         requestRender();
     }
 
+    /**
+     * How soft an edge may be to still be marked by focus peaking, in percent.
+     */
+    public void setFocusPeakingSensitivity(int percent) {
+        if (focusAssistOverlay == null) {
+            return;
+        }
+
+        queueEvent(() -> focusAssistOverlay.setSensitivity(percent));
+        requestRender();
+    }
+
     public void setZebraThreshold(int percent) {
         if (zebraOverlay == null) {
             return;

@@ -44,6 +44,7 @@ public class SettingsStoreTest {
 
         assertFalse(store.isFocusAssistEnabled());
         assertEquals(FocusPeakingColor.RED, store.getFocusPeakingColor());
+        assertEquals(50, store.getFocusPeakingSensitivity());
         assertFalse(store.isZebraEnabled());
         assertEquals(95, store.getZebraThreshold());
 
@@ -131,6 +132,7 @@ public class SettingsStoreTest {
         store.setSafeArea(SafeArea.TITLE);
         store.setGuideColor(GuideColor.YELLOW);
         store.setFocusPeakingColor(FocusPeakingColor.BLUE);
+        store.setFocusPeakingSensitivity(80);
         store.setZebraThreshold(70);
         store.setWaveformMode(WaveformMode.RGB);
         store.setVectorscopeMode(VectorscopeMode.WHITE);
@@ -142,6 +144,7 @@ public class SettingsStoreTest {
         assertEquals(SafeArea.TITLE, reloaded.getSafeArea());
         assertEquals(GuideColor.YELLOW, reloaded.getGuideColor());
         assertEquals(FocusPeakingColor.BLUE, reloaded.getFocusPeakingColor());
+        assertEquals(80, reloaded.getFocusPeakingSensitivity());
         assertEquals(70, reloaded.getZebraThreshold());
         assertEquals(WaveformMode.RGB, reloaded.getWaveformMode());
         assertEquals(VectorscopeMode.WHITE, reloaded.getVectorscopeMode());
