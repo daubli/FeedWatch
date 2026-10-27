@@ -52,14 +52,18 @@ Tap a tool button to turn the tool on or off, long-press it for its settings.
 
 Before building, we need to make sure that the following components are installed:
 
-- Java Development Kit (JDK) 11
+- Java Development Kit (JDK) 17
 - Android SDK Platform 33
 - NDI SDK for Android
 
-### 1. Java 11
+### 1. Java 17
 
-This project must be built with Java 11. Newer Java versions (e.g. Java 17) may cause Gradle or NDK build failures.
-The reason is, that this project should be runnable on older phones. Android SDK Platform Level 33 uses Java 11.
+Build the project with JDK 17, like the release workflow does. Gradle 7.4 and the Android Gradle Plugin 7.2.2 run on
+JDK 11 to 17; newer JDKs fail while dexing. If your default JDK is a different one, point Gradle to JDK 17:
+
+`./gradlew -Dorg.gradle.java.home=<JDK_17_HOME> assemble`
+
+The JDK only runs the build. The app itself is compiled for Java 8 and runs on Android 7.1 (API level 25) and newer.
 
 ### 2. Android SDK
 
