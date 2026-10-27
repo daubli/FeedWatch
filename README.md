@@ -1,157 +1,51 @@
 # FeedWatch
 
-Android App to view [NDI®](https://ndi.video/)- or UVC (**U**SB **V**ideo **C**lass Device) Feed on an Android mobile phone.
+Android app to view [NDI®](https://ndi.video/) or UVC (**U**SB **V**ideo **C**lass) feeds on an Android phone, with the
+monitoring tools of a field monitor.
 
-This project was renamed from NDIMonitor to FeedWatch to avoid confusion with the official 
-NDI® Tools app "NDI® Video Monitor" and I don't want to get in trouble with Vizrt ;)
+**[Try the live demo](https://feedwatch.daubli.de)**: the app runs right in your browser, with virtual sources and all
+monitoring tools. The latest APK is on the [releases page](https://github.com/daubli/FeedWatch/releases/latest).
+
+> **Is NDI® HX supported?**
+>
+> NDI® HX is currently not supported. I invested some effort and implemented a working prototype. However, in order
+> to receive NDI® HX streams for longer than 5 minutes, you need currently a NDI® Advanced SDK license. Even if I had a
+> license - which I do not - publishing the source code would not be useful, because I would not be able to publish the
+> license itself. Anyone who wanted to use this functionality would need to obtain the appropriate license
+> independently.
 
 ## Features
 
-### Video Sources
+### Sources
 
-<img src="img/sources.jpeg" alt="Source list" width="300">
+- **NDI® High Bandwidth** sources from the network. NDI® can be network-intensive, so a **USB-C Ethernet adapter** is
+  strongly recommended.
+- **Additional NDI® senders** outside mDNS discovery can be added by their IP address in the Settings.
+- **UVC capture cards**, such as USB HDMI grabbers, show up as sources as soon as they are plugged in (tested with a
+  low-cost UGREEN Video Capture Card).
+- **Default source**: long-press a source to open it automatically when the app starts, after a short countdown.
+- **Low Bandwidth Mode** uses the NDI® proxy stream instead of full resolution, for phones on Wi-Fi.
 
-All sources the app finds are listed on the start screen: NDI® sources from the network and UVC devices connected
-via USB. The list updates itself in the background, pull down to refresh it right away. Tap a source to open it.
+### Monitoring Tools
 
-- **NDI® High Bandwidth Monitoring**
-    - Supports NDI® High Bandwidth sources
-    - Since NDI® can be network-intensive, using a **USB-C Ethernet adapter** is strongly recommended.
-    - NDI® senders outside mDNS discovery can be added by their IP address in the Settings. The dot after
-      a full block of three digits is added for you. Changes apply right away.
+Tap a tool button to turn the tool on or off, long-press it for its settings.
 
-      <img src="img/settings.jpeg" alt="Additional NDI sources in the settings" width="300">
-    - **NDI® HX** is currently not supported. I invested some effort and implemented
-  a working prototype. However, in order to receive NDI® HX streams for
-  longer than 5 minutes, you need currently a NDI® Advanced SDK license.
-  Even if I had a license - which I do not - publishing the source code
-  would not be useful, because I would not be able to publish the license
-  itself. Anyone who wanted to use this functionality would need to obtain
-  the appropriate license independently.
+- **Focus peaking**: sharp edges in red, yellow or blue, sensitivity fixed at 70%
+- **Zebra**: stripes above a threshold from 50 to 100 IRE, 95 IRE by default
+- **Waveform monitor**: luma or RGB, drag to move it, pinch to resize it
+- **Vectorscope**: Rec. 709 with targets for the 75% color bars and a skin tone line, trace in color or white, zoom 1×
+  or 2×
+- **Framing guides**: rule of thirds or center cross, frame lines for 2.39:1, 4:3 or 9:16, a 90% title safe area,
+  in white, yellow or red
 
-- **UVC HDMI Capture Cards**  
-  The app can capture video from **UVC-compatible devices**, such as USB HDMI capture cards.  
-  This functionality was developed and tested with a low-cost **UGREEN Video Capture Card** (Amazon), which performed
-  reliably.  
-  Any supported UVC device will automatically appear as an available source.
+### Stream
 
-### Default Source
-
-Long-press a source and choose **Set as default source** to open it automatically. There can only be one default
-source, it is marked with a **DEFAULT** badge.
-
-<img src="img/source-menu.jpeg" alt="Setting the default source" width="300">
-
-Once per app start, the default source opens as soon as it is available. A short countdown is shown before, tap
-**Cancel** to stay on the source list. Closing the stream returns to the list without opening the source again.
-
-<img src="img/default-source.jpeg" alt="Default source countdown" width="300">
-
-The default source can also be removed in the Settings, even while it is not available.
-
-### Stream View
-
-![Stream view](img/stream.jpeg)
-
-Tap the picture to show or hide the controls. The top bar shows the source, its tally state, resolution, frame rate
-and pixel format. The bottom bar switches the monitoring tools and audio.
-
-### Stream Statistics
-
-Tap the chart icon next to the frame rate to show the stream statistics, a second tap closes them. They update
-twice a second:
-
-- **NDI®**: duration, bandwidth, connections, received and shown frame rate, received, dropped and skipped frames,
-  audio delay, audio buffer (filled / target), audio gaps and dropped audio frames
-- **UVC**: duration, received and shown frame rate, data rate of the MJPEG stream, received and dropped frames and
-  the time to decode a frame
-
-<img src="img/stream-stats.jpeg" alt="Stream statistics" width="600">
-
-### Audio
-
-NDI® audio is played back together with the picture, with a level meter for the left and right channel. Use the
-**AUDIO** button to mute it. Without audio, the picture is shown with the lowest latency instead of waiting for its
-audio.
-
-Audio goes through a jitter buffer, so packets that Wi-Fi holds back for a moment do not cause gaps. It starts at
-100 ms and grows by 50 ms each time it runs empty anyway, up to 200 ms. On a steady connection it shrinks again by
-50 ms, down to 50 ms, once 30 seconds passed without gaps and the delays seen would still fit. If it runs empty again
-soon after, it waits twice as long before the next try, up to 8 minutes. The picture waits for its audio, so a larger
-buffer delays both, but they stay in sync.
-
-### Low Bandwidth Mode
-
-Low Bandwidth Mode reduces network and CPU usage by using the NDI proxy stream instead of the full-resolution video feed. This mode is ideal when your android device is only connected to a wireless network. 
-While image quality is reduced compared to the full NDI stream it can nevertheless be enough to check feed existence, framing or exposure. 
-
-You can enable Low Bandwidth Mode in the app’s Settings (gear icon on the source list).
-
-### Viewer Mode
-
-Viewer Mode shows only the picture: monitoring tools, overlays and stream info are hidden, only the close and audio
-buttons remain. It can be enabled in the Settings.
-
----
-
-## Monitoring Tools
-
-### NDI Tally
-
-- Displays NDI® tally information (red for program /green for preview) for NDI sources
-
-![NDI Tally Example](img/tally-red.jpeg)
-
-### Focus Peaking
-
-- Simple focus peaking implementation
-- Fixed sharpness sensitivity: **70%**
-- Edge color **red**, **yellow** or **blue**: long-press the **PEAK** button to choose it
-
-![Focus Peaking Example](img/focus-assist.jpeg)
-
----
-
-### Zebra
-
-- Exposure warning using zebra stripes
-- Threshold from **50 to 100 IRE**, **95 IRE** by default: long-press the **ZEBRA** button to set it
-
-![Zebra Example](img/zebra.jpeg)
-
----
-
-### Waveform Monitor
-
-- Small waveform monitor over the picture, turned on with the **WFM** button
-- **Luma** or **RGB** waveform with the red, green and blue traces on top of each other: long-press the **WFM** button
-  to choose
-- Drag it with one finger to move it, pinch with two fingers to resize it, its place and size are remembered
-
-![Waveform Monitor Example](img/waveform.jpeg)
-
----
-
-### Vectorscope
-
-- Small vectorscope over the picture, turned on with the **VEC** button: hue as the angle, saturation as the
-  distance from the middle (Rec. 709)
-- Targets for the 75% color bars and a skin tone line
-- Long-press the **VEC** button to draw the trace in **color** or **white** and to zoom **1×** or **2×**, which spreads
-  the low saturation of skin or log footage
-- Moved and resized like the waveform monitor, both can be open at the same time
-
----
-
-### Framing Guides
-
-- **Grid**: rule of thirds or a center cross
-- **Frame lines** for **2.39:1**, **4:3** or **9:16**, the picture outside of them is darkened
-- **Title safe area** at **90%**
-- Guides in **white**, **yellow** or **red**
-- Long-press the **GRID** button to choose them, a tap turns all guides on or off
-
-![3×3 Grid Example](img/grid.jpeg)
+- **NDI® tally**: red for program, green for preview, in the top bar and as a border around the picture
+- **Audio**: NDI® audio in sync with the picture, with a stereo level meter and a jitter buffer of 50 to 200 ms. Muted,
+  the picture is shown with the lowest latency.
+- **Stream statistics**: frame rates, dropped and skipped frames, bandwidth and audio buffer, updated twice a second.
+  For UVC sources also the data rate and the time to decode a frame.
+- **Viewer mode**: only the picture, with the close and audio buttons
 
 ## Build Requirements
 
