@@ -1,7 +1,11 @@
 package de.daubli.feedwatch.ndi;
 
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -16,7 +20,15 @@ public class NdiFinder {
 
     private final String groups;
 
+    // the additional addresses from the settings
     private String extraIps;
+
+    // Machines that sent sources found before. mDNS can lose sources for good, e.g. when its packets get lost on
+    // the sender's Wi-Fi and the queries for them have backed off; a finder also asks these machines directly.
+    private final Set<String> knownHosts = new TreeSet<>();
+
+    // what the native finder asks directly: the additional addresses and the known machines
+    private String searchedIps;
 
     private long instancePointer;
 
@@ -26,11 +38,12 @@ public class NdiFinder {
         this.showLocalSources = showLocalSources;
         this.groups = groups;
         this.extraIps = extraIps;
+        this.searchedIps = extraIps;
         initNewFinderInstance();
     }
 
     public void initNewFinderInstance() {
-        this.instancePointer = findCreate(showLocalSources, groups, extraIps);
+        this.instancePointer = findCreate(showLocalSources, groups, searchedIps);
     }
 
     /**
@@ -39,11 +52,25 @@ public class NdiFinder {
      * thread.
      */
     public synchronized void setExtraIps(String extraIps) {
-        if (Objects.equals(this.extraIps, extraIps)) {
+        // a source found behind a removed address should go, not be kept as a known machine
+        Set<String> removed = splitIps(this.extraIps);
+        removed.removeAll(splitIps(extraIps));
+        knownHosts.removeAll(removed);
+
+        this.extraIps = extraIps;
+        searchIps();
+    }
+
+    /**
+     * Creates the native finder again when the addresses it should ask directly changed.
+     */
+    private void searchIps() {
+        String ips = combineIps(extraIps, knownHosts);
+        if (Objects.equals(searchedIps, ips)) {
             return;
         }
-        this.extraIps = extraIps;
-        LOG.info("Additional sources changed, searching " + extraIps);
+        searchedIps = ips;
+        LOG.info("Addresses to search changed, searching " + ips);
 
         // the queried sources stay, a source opened from the list is resolved from them until the next query
         if (instancePointer != 0) {
@@ -51,6 +78,28 @@ public class NdiFinder {
         }
         initNewFinderInstance();
         awaitRediscovery();
+    }
+
+    /**
+     * @return the additional addresses followed by the hosts not among them, comma separated, or null if there are
+     *         none
+     */
+    static String combineIps(String extraIps, Collection<String> hosts) {
+        Set<String> ips = splitIps(extraIps);
+        ips.addAll(hosts);
+        return ips.isEmpty() ? null : String.join(",", ips);
+    }
+
+    private static Set<String> splitIps(String ips) {
+        Set<String> split = new LinkedHashSet<>();
+        if (ips != null) {
+            for (String ip : ips.split(",")) {
+                if (!ip.trim().isEmpty()) {
+                    split.add(ip.trim());
+                }
+            }
+        }
+        return split;
     }
 
     /**
@@ -119,11 +168,25 @@ public class NdiFinder {
             }
 
             this.previouslyQueriedSources = currentNdiSources;
+            rememberHosts(currentNdiSources);
             return currentNdiSources;
 
         } catch (RuntimeException rte) {
             LOG.log(Level.WARNING, rte.getMessage(), rte);
             return new NdiSource[] {};
+        }
+    }
+
+    private void rememberHosts(NdiSource[] sources) {
+        boolean added = false;
+        for (NdiSource source : sources) {
+            String host = source.getHost();
+            if (host != null) {
+                added |= knownHosts.add(host);
+            }
+        }
+        if (added) {
+            searchIps();
         }
     }
 

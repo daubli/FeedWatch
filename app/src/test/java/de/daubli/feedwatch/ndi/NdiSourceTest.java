@@ -1,6 +1,7 @@
 package de.daubli.feedwatch.ndi;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 
@@ -22,5 +23,19 @@ public class NdiSourceTest {
         assertEquals("", source.getSourceName());
         assertEquals("", source.getUrlAddress());
         assertEquals("ndi:", source.getStableKey());
+    }
+
+    @Test
+    public void hostIsTheAddressWithoutThePort() {
+        assertEquals("192.168.1.146", new NdiSource("MAC (Cam)", "192.168.1.146:5962").getHost());
+        assertEquals("fe80::1", new NdiSource("MAC (Cam)", "[fe80::1]:5962").getHost());
+        assertEquals("192.168.1.146", new NdiSource("MAC (Cam)", "192.168.1.146").getHost());
+    }
+
+    @Test
+    public void hostIsNullWithoutAnAddress() {
+        assertNull(new NdiSource("MAC (Cam)", null).getHost());
+        assertNull(new NdiSource("MAC (Cam)", ":5962").getHost());
+        assertNull(new NdiSource("MAC (Cam)", "[]:5962").getHost());
     }
 }
