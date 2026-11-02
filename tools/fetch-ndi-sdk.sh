@@ -38,13 +38,13 @@ fi
 echo "Accepting the NDI SDK license and unpacking..."
 yes | sh "$INSTALLER" >/dev/null
 
-LIB_DIR=$(find sdk -type d -path '*/NDI SDK for Android/lib' | head -n 1)
+LIB_DIR=$(find "$TMP_DIR" -type d -path '*/NDI SDK for Android/lib' | head -n 1)
 if [ -z "$LIB_DIR" ]; then
     echo "NDI lib directory not found." >&2
     exit 1
 fi
 
-INCLUDE_DIR=$(find sdk -type d -path '*/NDI SDK for Android/include' | head -n 1)
+INCLUDE_DIR=$(find "$TMP_DIR" -type d -path '*/NDI SDK for Android/include' | head -n 1)
 if [ -n "$INCLUDE_DIR" ]; then
     mkdir -p "$ROOT/app/src/main/cpp/include"
     cp "$INCLUDE_DIR"/*.h "$ROOT/app/src/main/cpp/include/"
