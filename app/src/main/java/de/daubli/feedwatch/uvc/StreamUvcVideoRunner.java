@@ -97,9 +97,23 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     @Override
     public void run() {
-        captureManager.start(data -> {
+        captureManager.start((data, width, height) -> {
             usbFrames.incrementAndGet();
             usbBytes.addAndGet(data.length);
+
+            // libuvc decodes the native format and hands over packed RGBX, which the renderer
+            // takes as is. Only devices that deliver JPEG directly need the decoder below.
+            if (data.length == width * height * 4) {
+                ByteBuffer rgba = ByteBuffer.allocateDirect(data.length);
+                rgba.put(data);
+                rgba.rewind();
+
+                if (latestFrame.getAndSet(new Frame(rgba, width, height)) != null) {
+                    droppedFrames.incrementAndGet();
+                }
+                return;
+            }
+
             if (!decodeInProgress.compareAndSet(false, true)) {
                 droppedFrames.incrementAndGet();
                 latestCompressedFrame.set(data.clone());

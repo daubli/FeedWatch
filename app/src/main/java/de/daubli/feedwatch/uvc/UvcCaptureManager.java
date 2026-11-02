@@ -1,11 +1,15 @@
 package de.daubli.feedwatch.uvc;
 
 import android.content.Context;
+import android.graphics.PixelFormat;
 import android.hardware.usb.UsbDevice;
+import android.media.Image;
+import android.media.ImageReader;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Surface;
 
 import com.serenegiant.usb.IFrameCallback;
 import com.serenegiant.usb.Size;
@@ -20,17 +24,26 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * UVC capture based on libuvc through the UVCAndroid library.
+ * UVC capture through libuvc (UVCAndroid).
  *
- * <p>Unlike a plain USB bulk transfer, libuvc also handles isochronous endpoints, which is what
- * most HDMI capture sticks use. It enumerates the formats and frame sizes the device really
- * offers instead of assuming a MJPEG/bulk layout.</p>
+ * <p>libuvc also drives isochronous endpoints, which is what most HDMI capture sticks
+ * (for example the MACROSILICON MS2109) use. The original bulk-only implementation could
+ * not read those devices at all.</p>
+ *
+ * <p>Frames are delivered as packed RGBX. libuvc decodes MJPEG or YUYV natively, so the
+ * app does not need to decode JPEG in Java and the frame rate stays usable on older SoCs.</p>
  */
 public class UvcCaptureManager {
     private static final String TAG = "UvcCaptureManager";
 
     private static final long OPEN_TIMEOUT_MS = 15_000;
     private static final long CLOSE_TIMEOUT_MS = 3_000;
+
+    /** A field monitor does not need more than this, and it keeps the old tablet responsive. */
+    private static final int PREFERRED_WIDTH = 1280;
+    private static final int PREFERRED_HEIGHT = 720;
+    private static final int MAX_WIDTH = 1920;
+    private static final int MAX_HEIGHT = 1080;
 
     private final UVCSource uvcSource;
     private final Context context;
@@ -41,6 +54,7 @@ public class UvcCaptureManager {
     private HandlerThread cameraThread;
     private Handler cameraHandler;
     private UVCCamera camera;
+    private ImageReader previewSink;
 
     private volatile boolean capturing = false;
     private FrameCallback callback;
@@ -49,7 +63,12 @@ public class UvcCaptureManager {
     private final AtomicReference<Exception> openError = new AtomicReference<>();
 
     public interface FrameCallback {
-        void onFrame(byte[] jpegFrame);
+        /**
+         * @param frame  packed RGBX pixels, or JPEG bytes when the device only offers MJPEG
+         * @param width  frame width
+         * @param height frame height
+         */
+        void onFrame(byte[] frame, int width, int height);
     }
 
     public UvcCaptureManager(UVCSource source, Context context) {
@@ -155,13 +174,35 @@ public class UvcCaptureManager {
 
         Size mode = chooseMode(sizes);
         if (mode == null) {
-            throw new IllegalStateException("The device reports no MJPEG or uncompressed video mode");
+            throw new IllegalStateException("The device reports no video mode");
         }
 
-        Log.i(TAG, String.format(Locale.US,
-                "Using %dx%d @ %d fps, type=0x%02x", mode.width, mode.height, mode.fps, mode.type));
+        Log.i(TAG, String.format(Locale.US, "Using %dx%d @ %d fps, type=0x%02x",
+                mode.width, mode.height, mode.fps, mode.type));
 
         opened.setPreviewSize(mode);
+
+        // libuvc only starts its capture thread when a preview window is set, even when the
+        // frames are consumed through the callback. Drain the window so it never blocks.
+        previewSink = ImageReader.newInstance(mode.width, mode.height, PixelFormat.RGBA_8888, 2);
+        previewSink.setOnImageAvailableListener(reader -> {
+            Image image = null;
+            try {
+                image = reader.acquireLatestImage();
+            } catch (Exception e) {
+                Log.w(TAG, "Could not acquire the preview buffer", e);
+            } finally {
+                if (image != null) {
+                    image.close();
+                }
+            }
+        }, cameraHandler);
+
+        Surface surface = previewSink.getSurface();
+        opened.setPreviewDisplay(surface);
+
+        final int width = mode.width;
+        final int height = mode.height;
 
         opened.setFrameCallback(new IFrameCallback() {
             @Override
@@ -175,9 +216,9 @@ public class UvcCaptureManager {
                 }
                 byte[] data = new byte[length];
                 frame.get(data, 0, length);
-                callback.onFrame(data);
+                callback.onFrame(data, width, height);
             }
-        }, UVCCamera.PIXEL_FORMAT_RAW);
+        }, UVCCamera.PIXEL_FORMAT_RGBX);
 
         capturing = true;
         opened.startPreview();
@@ -185,43 +226,56 @@ public class UvcCaptureManager {
     }
 
     /**
-     * Prefers MJPEG (what the rest of the app decodes), then 16:9, then the largest frame.
+     * Prefers MJPEG, a 16:9 frame, 720p when the device offers it, and never more than 1080p.
      */
     private Size chooseMode(List<Size> sizes) {
         if (sizes == null || sizes.isEmpty()) {
             return null;
         }
 
-        Size best = null;
+        Size mjpeg720 = null;
+        Size mjpegFhd = null;
+        Size mjpegAny = null;
+        Size any = null;
+
         for (Size size : sizes) {
-            if (best == null) {
-                best = size;
+            if (any == null) {
+                any = size;
+            }
+
+            boolean isMjpeg = size.type == UVCCamera.UVC_VS_FRAME_MJPEG;
+            if (!isMjpeg) {
+                continue;
+            }
+            if (mjpegAny == null) {
+                mjpegAny = size;
+            }
+
+            boolean is16x9 = size.width * 9 == size.height * 16;
+            if (!is16x9) {
                 continue;
             }
 
-            boolean sizeIsMjpeg = size.type == UVCCamera.UVC_VS_FRAME_MJPEG;
-            boolean bestIsMjpeg = best.type == UVCCamera.UVC_VS_FRAME_MJPEG;
-            if (sizeIsMjpeg != bestIsMjpeg) {
-                if (sizeIsMjpeg) {
-                    best = size;
-                }
-                continue;
+            if (size.width == PREFERRED_WIDTH && size.height == PREFERRED_HEIGHT && mjpeg720 == null) {
+                mjpeg720 = size;
             }
-
-            boolean sizeIs16x9 = size.width * 9 == size.height * 16;
-            boolean bestIs16x9 = best.width * 9 == best.height * 16;
-            if (sizeIs16x9 != bestIs16x9) {
-                if (sizeIs16x9) {
-                    best = size;
-                }
-                continue;
-            }
-
-            if ((long) size.width * size.height > (long) best.width * best.height) {
-                best = size;
+            if (size.width <= MAX_WIDTH && size.height <= MAX_HEIGHT
+                    && (mjpegFhd == null
+                    || (long) size.width * size.height > (long) mjpegFhd.width * mjpegFhd.height)) {
+                mjpegFhd = size;
             }
         }
-        return best;
+
+        if (mjpeg720 != null) {
+            return mjpeg720;
+        }
+        if (mjpegFhd != null) {
+            return mjpegFhd;
+        }
+        if (mjpegAny != null) {
+            return mjpegAny;
+        }
+        return any;
     }
 
     private void logSupportedModes(List<Size> sizes) {
@@ -270,6 +324,14 @@ public class UvcCaptureManager {
                 closed.countDown();
             });
             await(closed, CLOSE_TIMEOUT_MS);
+        }
+
+        if (previewSink != null) {
+            try {
+                previewSink.close();
+            } catch (Exception ignored) {
+            }
+            previewSink = null;
         }
 
         if (cameraThread != null) {
