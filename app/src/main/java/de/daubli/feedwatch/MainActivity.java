@@ -28,6 +28,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -330,10 +331,15 @@ public class MainActivity extends AppCompatActivity {
 
     @MainThread
     private void applyNewSources(List<VideoSource> nextList) {
+        boolean wasEmpty = currentSources.isEmpty();
         currentSources.clear();
         currentSources.addAll(nextList);
 
         adapter.notifyDataSetChanged();
+        // the list can only take the focus once it has sources, a TV remote starts on the first one
+        if (wasEmpty && !currentSources.isEmpty() && !sourceListView.isInTouchMode()) {
+            sourceListView.requestFocus();
+        }
 
         sourceCount.setText(String.valueOf(currentSources.size()));
         emptyState.setVisibility(currentSources.isEmpty() ? View.VISIBLE : View.GONE);
@@ -471,6 +477,35 @@ public class MainActivity extends AppCompatActivity {
         if (autoStartProgress != null) {
             autoStartProgress.cancel();
             autoStartProgress = null;
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        // the snackbar's cancel button is out of reach of a TV remote, any key cancels instead
+        if (pendingAutoStart != null && event.getAction() == KeyEvent.ACTION_DOWN && isRemoteKey(event)) {
+            cancelPendingAutoStart();
+            autoStartConsumed = true;
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private boolean isRemoteKey(KeyEvent event) {
+        switch (event.getKeyCode()) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                return true;
+            case KeyEvent.KEYCODE_BACK:
+                // on a phone back still leaves the app, the snackbar has the cancel button
+                return !sourceListView.isInTouchMode();
+            default:
+                return false;
         }
     }
 

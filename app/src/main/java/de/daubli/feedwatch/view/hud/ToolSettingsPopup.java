@@ -24,8 +24,9 @@ import de.daubli.feedwatch.R;
  * the user pick one of a few choices or set a value on a slider, a change applies right away and the popup stays
  * open.
  * <p>
- * The popup does not take focus, so the stream stays in immersive fullscreen. Touches outside of it reach the
- * screen below, which should close it with {@link #dismiss()}.
+ * On a touch screen the popup does not take focus, so the stream stays in immersive fullscreen. Touches outside of
+ * it reach the screen below, which should close it with {@link #dismiss()}. Opened with a TV remote or keyboard it
+ * takes the focus instead, so the keys move through its choices, and back closes it.
  */
 public class ToolSettingsPopup {
 
@@ -99,6 +100,10 @@ public class ToolSettingsPopup {
 
     private int sectionCount;
 
+    // the selected choice of the first section, or its slider, where a remote starts
+    @Nullable
+    private View initialFocus;
+
     public ToolSettingsPopup(Context context, CharSequence title) {
         inflater = LayoutInflater.from(context);
         content = inflater.inflate(R.layout.popup_tool_settings, null);
@@ -137,6 +142,9 @@ public class ToolSettingsPopup {
 
             int index = i;
             choiceView.setActivated(i == selected);
+            if (i == selected && initialFocus == null) {
+                initialFocus = choiceView;
+            }
             choiceView.setOnClickListener(v -> {
                 for (int c = 0; c < choiceViews.getChildCount(); c++) {
                     choiceViews.getChildAt(c).setActivated(c == index);
@@ -231,6 +239,9 @@ public class ToolSettingsPopup {
         slider.setValueTo(to);
         slider.setStepSize(1);
         slider.setValue(clamped);
+        if (initialFocus == null) {
+            initialFocus = slider;
+        }
         slider.addOnChangeListener((s, newValue, fromUser) -> {
             int rounded = Math.round(newValue);
             valueView.setText(formatter.format(rounded));
@@ -265,7 +276,12 @@ public class ToolSettingsPopup {
 
         int x = Math.max(margin, Math.min(location[0], windowWidth - width - margin));
         int y = Math.max(margin, location[1] - height - gap);
+        boolean keyNavigation = !anchor.isInTouchMode();
+        window.setFocusable(keyNavigation);
         window.showAtLocation(anchor, Gravity.TOP | Gravity.START, x, y);
+        if (keyNavigation && initialFocus != null) {
+            initialFocus.requestFocus();
+        }
     }
 
     public boolean isShowing() {

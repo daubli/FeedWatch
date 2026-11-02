@@ -5,6 +5,7 @@
              android:layout_width="match_parent"
              android:layout_height="match_parent"
              android:background="@color/black"
+             android:focusable="false"
              tools:context=".StreamVideoActivity">
 
     <de.daubli.feedwatch.view.base.OpenGLVideoView
@@ -30,6 +31,7 @@
             android:id="@+id/waveformMonitorView"
             android:layout_width="260dp"
             android:layout_height="156dp"
+            android:focusable="false"
             android:visibility="gone"/>
 
     <!-- Places itself, it can be dragged and pinched -->
@@ -37,6 +39,7 @@
             android:id="@+id/vectorscopeView"
             android:layout_width="180dp"
             android:layout_height="180dp"
+            android:focusable="false"
             android:visibility="gone"/>
 
     <!-- Monitor HUD. The container is not clickable, so taps outside the bars reach the video view. -->
@@ -54,6 +57,7 @@
                 android:layout_height="56dp"
                 android:layout_gravity="top"
                 android:background="@drawable/bg_hud_top"
+                android:focusable="false"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="8dp"
@@ -153,6 +157,7 @@
                 android:layout_height="80dp"
                 android:layout_gravity="bottom"
                 android:background="@drawable/bg_hud_bottom"
+                android:focusable="false"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="16dp"

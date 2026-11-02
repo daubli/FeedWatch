@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- NDI asks for this statement and a link to ndi.video near every place where NDI sources are chosen -->
+<!-- NDI asks for this statement and a link to ndi.video near every place where NDI sources are chosen.
+     Not focusable, a TV remote should not stop on it: a TV often has no browser to open the link. -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
           android:autoLink="web"
+          android:focusable="false"
           android:gravity="center"
           android:lineSpacingMultiplier="1.2"
           android:paddingStart="@dimen/fw_screen_padding"

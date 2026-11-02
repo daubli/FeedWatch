@@ -64,6 +64,10 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private boolean hudShown;
 
+    // where a TV remote was in the HUD when it hid, it continues there when the HUD comes back
+    @Nullable
+    private View lastHudFocus;
+
     @Nullable
     private ToolSettingsPopup toolSettingsPopup;
 
@@ -97,6 +101,8 @@ public class StreamVideoActivity extends AppCompatActivity {
             initSavedState();
         }
         showMenuAndScheduleHide();
+        // otherwise the window puts a remote on the close button, the first button in the layout
+        defaultHudFocus().requestFocus();
     }
 
     private VideoSource resolveVideoSource(Intent intent) {
@@ -214,6 +220,10 @@ public class StreamVideoActivity extends AppCompatActivity {
     private void fadeOutHud() {
         hudShown = false;
         View hud = viewBinding.hudLayout;
+        View focused = hud.findFocus();
+        if (focused != null) {
+            lastHudFocus = focused;
+        }
         hud.animate().cancel();
         hud.animate().alpha(0f).setDuration(200).withEndAction(() -> hud.setVisibility(View.GONE));
     }
@@ -248,6 +258,86 @@ public class StreamVideoActivity extends AppCompatActivity {
         } else {
             showMenuAndScheduleHide();
         }
+    }
+
+    /**
+     * Shows the HUD for a TV remote or keyboard and puts the focus on a button in it, as there is no screen to tap.
+     */
+    private void showHudForKeys() {
+        showMenuAndScheduleHide();
+        View target = lastHudFocus;
+        if (target == null || !target.isShown()) {
+            target = defaultHudFocus();
+        }
+        target.requestFocus();
+    }
+
+    /**
+     * The first tool, or the close button when there is none, like for a USB source in viewer mode.
+     */
+    private View defaultHudFocus() {
+        View firstTool = firstVisibleChild(viewBinding.bottomBar);
+        return firstTool != null ? firstTool : viewBinding.closeButton;
+    }
+
+    @Nullable
+    private static View firstVisibleChild(ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child.getVisibility() == View.VISIBLE && child.isFocusable()) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isNavigationKey(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && isNavigationKey(event.getKeyCode())) {
+            // the first key only brings up the HUD, like the first tap
+            if (!hudShown) {
+                showHudForKeys();
+                return true;
+            }
+            // the HUD stays open while a popup is, until it closes
+            if (!isPopupShowing()) {
+                extendMenuTimeout();
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (dismissToolSettings() || dismissStats()) {
+            return;
+        }
+        // with a remote, back hides the HUD first, like the tap on the picture does
+        if (hudShown && !viewBinding.getRoot().isInTouchMode()) {
+            hideMenuNow();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    private boolean isPopupShowing() {
+        return (toolSettingsPopup != null && toolSettingsPopup.isShowing())
+                || (statsPopup != null && statsPopup.isShowing());
     }
 
     private void initializeZebraButton() {

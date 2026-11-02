@@ -28,6 +28,9 @@
     <color name="fw_hud_chip">#26FFFFFF</color>
     <color name="fw_hud_pressed">#33FFFFFF</color>
 
+    <!-- Ring around the view a TV remote is on, only drawn on TVs (drawable-television) -->
+    <color name="fw_focus">#FFFFFFFF</color>
+
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>
