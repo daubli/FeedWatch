@@ -64,11 +64,11 @@ public class UvcCaptureManager {
 
     public interface FrameCallback {
         /**
-         * @param frame  packed RGBX pixels, or JPEG bytes when the device only offers MJPEG
+         * @param frame  packed RGBX pixels, only valid during the call
          * @param width  frame width
          * @param height frame height
          */
-        void onFrame(byte[] frame, int width, int height);
+        void onFrame(ByteBuffer frame, int width, int height);
     }
 
     public UvcCaptureManager(UVCSource source, Context context) {
@@ -207,16 +207,10 @@ public class UvcCaptureManager {
         opened.setFrameCallback(new IFrameCallback() {
             @Override
             public void onFrame(ByteBuffer frame) {
-                if (!capturing || callback == null || frame == null) {
+                if (!capturing || callback == null || frame == null || frame.remaining() <= 0) {
                     return;
                 }
-                int length = frame.remaining();
-                if (length <= 0) {
-                    return;
-                }
-                byte[] data = new byte[length];
-                frame.get(data, 0, length);
-                callback.onFrame(data, width, height);
+                callback.onFrame(frame, width, height);
             }
         }, UVCCamera.PIXEL_FORMAT_RGBX);
 

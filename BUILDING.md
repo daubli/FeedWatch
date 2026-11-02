@@ -65,3 +65,20 @@ rm -rf ~/.gradle/caches/transforms-3
 ```
 
 Delete the project directory `.gradle` as well if the error persists.
+
+## Troubleshooting
+
+### The picture stays black, logcat shows `failed start_streaming (-5)`
+
+`-5` is `LIBUSB_ERROR_NOT_FOUND` while setting the video interface's alternate
+setting. In practice the capture card is stuck because the app or another app
+was killed while streaming. Unplug the card and plug it back in; a USB port
+rebind or toggling `authorized` in sysfs is usually not enough, the card needs
+its power cycled.
+
+Make sure no other app grabs the card on attach. `OTG View`
+(`com.dingtai.snakecamera`) is known to do that; check with:
+
+```sh
+for p in /proc/[0-9]*; do ls -l $p/fd 2>/dev/null | grep -q '/dev/bus/usb/' && echo $p $(cat $p/comm); done
+```
