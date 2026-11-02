@@ -121,7 +121,7 @@ public class MainActivity extends AppCompatActivity {
         sourceCount = findViewById(R.id.sourceCount);
         swipeRefreshLayout = findViewById(R.id.swipeToRefresh);
 
-        Ndi.initialize();
+        Ndi.initialize(getApplicationContext());
 
         settingsStore = new SettingsStore();
         ndiDiscoveryManager = new NdiDiscoveryManager(getApplicationContext());

@@ -2,13 +2,20 @@
 
 package de.daubli.feedwatch.ndi;
 
+import java.io.File;
+
+import android.content.Context;
+
 public class Ndi {
     static {
         System.loadLibrary("ndi-wrapper");
     }
 
-    public static void initialize() {
-        boolean initialized = nInitializeNDI();
+    public static void initialize(Context context) {
+        File configDir = NdiConfig.write(new File(context.getNoBackupFilesDir(), "ndi"));
+        // the library keeps lock files in TMPDIR, without it in /data/local/tmp where apps can't write
+        boolean initialized = nInitializeNDI(configDir != null ? configDir.getAbsolutePath() : null,
+                context.getCacheDir().getAbsolutePath());
 
         if (!initialized) {
             throw new RuntimeException("Could not initialize NDI.");
@@ -24,7 +31,11 @@ public class Ndi {
     }
 
 
-    public static native boolean nInitializeNDI();
+    /**
+     * @param configDir folder with the library's settings, or null for its defaults
+     * @param tmpDir    writable folder for the library's lock files
+     */
+    public static native boolean nInitializeNDI(String configDir, String tmpDir);
 
     public static native String nGetNdiVersion();
 
