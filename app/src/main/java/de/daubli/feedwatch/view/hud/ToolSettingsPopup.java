@@ -268,6 +268,27 @@ public class ToolSettingsPopup {
         window.showAtLocation(anchor, Gravity.TOP | Gravity.START, x, y);
     }
 
+    /**
+     * Shows the popup below the anchor, right aligned and kept inside the window. For anchors in the top bar.
+     */
+    public void showBelow(View anchor) {
+        float density = anchor.getResources().getDisplayMetrics().density;
+        int gap = Math.round(8 * density);
+        int margin = Math.round(8 * density);
+
+        content.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int width = content.getMeasuredWidth();
+
+        int[] location = new int[2];
+        anchor.getLocationInWindow(location);
+        int windowWidth = anchor.getRootView().getWidth();
+
+        int alignedRight = location[0] + anchor.getWidth() - width;
+        int x = Math.max(margin, Math.min(alignedRight, windowWidth - width - margin));
+        int y = location[1] + anchor.getHeight() + gap;
+        window.showAtLocation(anchor, Gravity.TOP | Gravity.START, x, y);
+    }
+
     public boolean isShowing() {
         return window.isShowing();
     }

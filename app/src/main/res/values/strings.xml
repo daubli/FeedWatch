@@ -62,6 +62,9 @@
     <string name="audio_left">L</string>
     <string name="peaking_settings_title">Focus peaking</string>
     <string name="peaking_settings_color">Color</string>
+    <string name="resolution_settings_title">Resolution</string>
+    <string name="resolution_settings_choice">Frame size</string>
+    <string name="resolution_choice">%1$d p</string>
     <string name="zebra_settings_title">Zebra</string>
     <string name="zebra_settings_threshold">Threshold</string>
     <string name="percent_value">%1$d%%</string>
