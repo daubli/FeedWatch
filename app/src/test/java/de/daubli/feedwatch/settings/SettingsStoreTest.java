@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.robolectric.Shadows.shadowOf;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,6 +15,7 @@ import org.robolectric.RobolectricTestRunner;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import androidx.test.core.app.ApplicationProvider;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
 import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
@@ -67,6 +69,18 @@ public class SettingsStoreTest {
         assertFalse(store.isViewerModeEnabled());
         assertNull(store.getDefaultSourceKey());
         assertNull(store.getDefaultSourceLabel());
+    }
+
+    @Test
+    public void viewerModeIsOnByDefaultOnATv() {
+        Context context = ApplicationProvider.getApplicationContext();
+        shadowOf(context.getPackageManager()).setSystemFeature(PackageManager.FEATURE_LEANBACK, true);
+
+        assertTrue(store.isViewerModeEnabled());
+
+        // turned off in the settings, it stays off
+        store.setViewerModeEnabled(false);
+        assertFalse(store.isViewerModeEnabled());
     }
 
     @Test

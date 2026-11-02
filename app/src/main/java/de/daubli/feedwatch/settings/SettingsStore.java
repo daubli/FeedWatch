@@ -9,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusAssistOverlay;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
 import de.daubli.feedwatch.view.overlays.framehelper.FrameLines;
@@ -416,10 +417,14 @@ public class SettingsStore {
 
     /**
      * Shows only the picture while streaming: monitoring tools, overlays and stream info are hidden, only the close
-     * and audio buttons remain.
+     * and audio buttons remain. On by default on a TV, which shows the feed rather than being used to set up the shot.
      */
     public boolean isViewerModeEnabled() {
-        return sharedPreferences.getBoolean(VIEWER_MODE_ENABLED_KEY, false);
+        return sharedPreferences.getBoolean(VIEWER_MODE_ENABLED_KEY, isTv());
+    }
+
+    private static boolean isTv() {
+        return getAppContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
     }
 
     public void setViewerModeEnabled(boolean enabled) {
