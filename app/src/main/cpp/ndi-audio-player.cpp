@@ -21,7 +21,8 @@ const char *TAG = "NdiAudioPlayer";
 // frames pending for it are limited.
 const int32_t BUFFER_INITIAL_MS = 100;
 const int32_t BUFFER_STEP_MS = 50;
-const int32_t BUFFER_MAX_MS = 200;
+// 400 ms bridges the gaps of a busy 100 Mbit link (a TV's Ethernet port at 70 Mbit/s of video: 120 to 350 ms)
+const int32_t BUFFER_MAX_MS = 400;
 
 // On a steady connection the target shrinks again: after a window without running empty, if the deepest dip of the
 // level in it plus a margin also fits into the smaller target. Wi-Fi gaps come in rarer, larger ones too: if the

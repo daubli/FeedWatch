@@ -28,10 +28,10 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private static final String TAG = "StreamNDI";
 
-    // Frames wait in pendingFrames until their audio is heard: enough for ~250 ms of delay at 50 fps (the audio jitter
+    // Frames wait in pendingFrames until their audio is heard: enough for ~550 ms of delay at 50 fps (the audio jitter
     // buffer at its limit plus the output latency), plus the frames in flight to GL. They are only wrappers, the
-    // buffers belong to the frame sync.
-    private static final int VIDEO_FRAME_POOL_SIZE = 16;
+    // buffers belong to the frame sync and are only held while a frame waits.
+    private static final int VIDEO_FRAME_POOL_SIZE = 32;
 
     // From the Choreographer frame time to the frame being on screen: GL draws it in this frame and SurfaceFlinger
     // shows it with the next composition. Measured with a flash/beep source on an SM-M315F.
