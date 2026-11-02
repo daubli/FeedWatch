@@ -14,6 +14,23 @@ monitoring tools. The latest APK is on the [releases page](https://github.com/da
 > license itself. Anyone who wanted to use this functionality would need to obtain the appropriate license
 > independently.
 
+## Changes in this fork
+
+This fork replaces the UVC capture layer and adds audio and a resolution choice for capture cards:
+
+- **UVC through libuvc** instead of a bulk-only USB reader. Cards that stream over isochronous endpoints now work at
+  all (the original code stopped with `No BULK IN endpoint found`), and the frame size is taken from the formats the
+  device reports instead of being assumed.
+- **RGBX frames from libuvc**: no JPEG decoding in Java any more, and the pixels are copied once into a small pool of
+  recycled buffers instead of allocating a new 3.7 MB buffer per frame. 1280×720 went from about 24 to about 30 fps
+  on an SM-T800.
+- **UVC audio**: the card's USB audio input is recorded, played through the speaker and shown on the stereo level
+  meter. The audio button mutes playback and keeps the meter live.
+- **Resolution picker**: the resolution chip in the top bar opens 480 p / 576 p / 720 p / 1080 p for UVC sources.
+- **Build**: AGP 8.1.4, Gradle 8.7, JDK 17 and platform 34; the NDI SDK is fetched by `tools/fetch-ndi-sdk.sh`.
+- **Troubleshooting**: a capture card that was killed while streaming needs its power cycled, see
+  [BUILDING.md](BUILDING.md).
+
 ## Features
 
 ### Sources
