@@ -76,6 +76,8 @@ public class SettingsStore {
 
     private static final String VIEWER_MODE_ENABLED_KEY = "de.daubli.feedwatch.view.viewermode.enabled";
 
+    private static final String UVC_RESOLUTION_HEIGHT_KEY = "de.daubli.feedwatch.uvc.resolution.height";
+
     private static final String DEFAULT_SOURCE_KEY = "de.daubli.feedwatch.sources.default.key";
 
     private static final String DEFAULT_SOURCE_LABEL_KEY = "de.daubli.feedwatch.sources.default.label";
@@ -408,6 +410,20 @@ public class SettingsStore {
     public void setViewerModeEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(VIEWER_MODE_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * Preferred frame height of a UVC source, 720 by default. The capture falls back to the closest
+     * height the device actually offers.
+     */
+    public int getUvcResolutionHeight() {
+        return sharedPreferences.getInt(UVC_RESOLUTION_HEIGHT_KEY, 720);
+    }
+
+    public void setUvcResolutionHeight(int height) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(UVC_RESOLUTION_HEIGHT_KEY, height);
         editor.apply();
     }
 

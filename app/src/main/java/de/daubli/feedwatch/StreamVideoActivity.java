@@ -642,6 +642,13 @@ public class StreamVideoActivity extends AppCompatActivity {
         viewBinding.tallyChip.setVisibility(isUvc ? View.GONE : View.VISIBLE);
         viewBinding.lowBandwidthChip.setVisibility(
                 !isUvc && new SettingsStore().isLowBandwidthModeEnabled() ? View.VISIBLE : View.GONE);
+
+        if (isUvc) {
+            viewBinding.resolutionChip.setOnClickListener(view -> {
+                extendMenuTimeout();
+                showResolutionPicker();
+            });
+        }
     }
 
     /**
@@ -735,6 +742,46 @@ public class StreamVideoActivity extends AppCompatActivity {
         }
     }
 
+    private static final int[] RESOLUTION_HEIGHTS = {480, 576, 720, 1080};
+
+    private void showResolutionPicker() {
+        SettingsStore settingsStore = new SettingsStore();
+        int current = settingsStore.getUvcResolutionHeight();
+
+        List<ToolSettingsPopup.Choice> choices = new ArrayList<>();
+        int selected = 0;
+        for (int i = 0; i < RESOLUTION_HEIGHTS.length; i++) {
+            choices.add(ToolSettingsPopup.Choice.text(getString(R.string.resolution_choice, RESOLUTION_HEIGHTS[i])));
+            if (RESOLUTION_HEIGHTS[i] == current) {
+                selected = i;
+            }
+        }
+
+        ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.resolution_settings_title))
+                .addChoices(getString(R.string.resolution_settings_choice), choices, selected, index -> {
+                    int height = RESOLUTION_HEIGHTS[index];
+                    if (height != settingsStore.getUvcResolutionHeight()) {
+                        settingsStore.setUvcResolutionHeight(height);
+                        // the camera has to be reopened with the new frame size
+                        restartStream();
+                    }
+                });
+        showToolSettingsBelow(popup, viewBinding.resolutionChip);
+    }
+
+    /**
+     * Opens a tool's settings below its button, for buttons in the top bar. The HUD stays open while they are shown.
+     */
+    private void showToolSettingsBelow(ToolSettingsPopup popup, View toolButton) {
+        dismissToolSettings();
+        dismissStats();
+        menuHandler.removeCallbacks(hideMenuCallback);
+
+        popup.setOnDismissListener(this::extendMenuTimeout);
+        toolSettingsPopup = popup;
+        popup.showBelow(toolButton);
+    }
+
     private void initializeCloseButton() {
         viewBinding.closeButton.setOnClickListener(view -> closeVideoActivity());
     }
@@ -796,6 +843,10 @@ public class StreamVideoActivity extends AppCompatActivity {
             return;
         }
 
+        startStream();
+    }
+
+    private void startStream() {
         if (videoSource instanceof NdiSource) {
             runner = new StreamNDIVideoRunner((NdiSource) videoSource, viewBinding, this);
             runner.start();
@@ -805,6 +856,17 @@ public class StreamVideoActivity extends AppCompatActivity {
         } else {
             finish();
         }
+    }
+
+    /**
+     * Reopens the stream, e.g. after the preferred UVC resolution changed.
+     */
+    private void restartStream() {
+        if (runner != null) {
+            runner.stopStream();
+            runner = null;
+        }
+        startStream();
     }
 
     @Override

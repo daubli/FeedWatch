@@ -132,7 +132,8 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
     }
 
     public StreamUvcVideoRunner(UVCSource uvcSource, StreamVideoActivityBinding binding, StreamVideoActivity activity) {
-        this.captureManager = new UvcCaptureManager(uvcSource, activity);
+        this.captureManager = new UvcCaptureManager(uvcSource, activity,
+                new SettingsStore().getUvcResolutionHeight());
         this.openGLVideoView = binding.openGLVideoView;
         this.framingHelperOverlayView = binding.framingHelperOverlayView;
         this.activity = activity;

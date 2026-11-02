@@ -47,6 +47,7 @@ public class UvcCaptureManager {
 
     private final UVCSource uvcSource;
     private final Context context;
+    private final int preferredHeight;
 
     private USBMonitor usbMonitor;
     private USBMonitor.UsbControlBlock ctrlBlock;
@@ -71,9 +72,10 @@ public class UvcCaptureManager {
         void onFrame(ByteBuffer frame, int width, int height);
     }
 
-    public UvcCaptureManager(UVCSource source, Context context) {
+    public UvcCaptureManager(UVCSource source, Context context, int preferredHeight) {
         this.uvcSource = source;
         this.context = context.getApplicationContext();
+        this.preferredHeight = preferredHeight;
     }
 
     public void start(FrameCallback callback) {
@@ -220,56 +222,49 @@ public class UvcCaptureManager {
     }
 
     /**
-     * Prefers MJPEG, a 16:9 frame, 720p when the device offers it, and never more than 1080p.
+     * Picks the frame the user asked for (by height), preferring MJPEG. Falls back to the closest
+     * height the device offers and then to the best remaining mode.
      */
     private Size chooseMode(List<Size> sizes) {
         if (sizes == null || sizes.isEmpty()) {
             return null;
         }
 
-        Size mjpeg720 = null;
-        Size mjpegFhd = null;
-        Size mjpegAny = null;
-        Size any = null;
+        Size mjpeg = closestHeight(sizes, true);
+        if (mjpeg != null) {
+            return mjpeg;
+        }
+
+        Size any = closestHeight(sizes, false);
+        return any != null ? any : sizes.get(0);
+    }
+
+    /** Closest frame height to the preference; ties prefer the aspect ratio closest to 16:9, then the wider frame. */
+    private Size closestHeight(List<Size> sizes, boolean mjpegOnly) {
+        Size best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        int bestAspect = Integer.MAX_VALUE;
 
         for (Size size : sizes) {
-            if (any == null) {
-                any = size;
-            }
-
-            boolean isMjpeg = size.type == UVCCamera.UVC_VS_FRAME_MJPEG;
-            if (!isMjpeg) {
-                continue;
-            }
-            if (mjpegAny == null) {
-                mjpegAny = size;
-            }
-
-            boolean is16x9 = size.width * 9 == size.height * 16;
-            if (!is16x9) {
+            if (mjpegOnly && size.type != UVCCamera.UVC_VS_FRAME_MJPEG) {
                 continue;
             }
 
-            if (size.width == PREFERRED_WIDTH && size.height == PREFERRED_HEIGHT && mjpeg720 == null) {
-                mjpeg720 = size;
-            }
-            if (size.width <= MAX_WIDTH && size.height <= MAX_HEIGHT
-                    && (mjpegFhd == null
-                    || (long) size.width * size.height > (long) mjpegFhd.width * mjpegFhd.height)) {
-                mjpegFhd = size;
+            int distance = Math.abs(size.height - preferredHeight);
+            int aspect = Math.abs(size.width * 9 - size.height * 16) / Math.max(1, size.height);
+
+            boolean better = best == null
+                    || distance < bestDistance
+                    || (distance == bestDistance && aspect < bestAspect)
+                    || (distance == bestDistance && aspect == bestAspect && size.width > best.width);
+            if (better) {
+                best = size;
+                bestDistance = distance;
+                bestAspect = aspect;
             }
         }
 
-        if (mjpeg720 != null) {
-            return mjpeg720;
-        }
-        if (mjpegFhd != null) {
-            return mjpegFhd;
-        }
-        if (mjpegAny != null) {
-            return mjpegAny;
-        }
-        return any;
+        return best;
     }
 
     private void logSupportedModes(List<Size> sizes) {
