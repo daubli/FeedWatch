@@ -52,6 +52,8 @@
     <string name="hud_tally_idle">TALLY</string>
     <string name="hud_waiting">NO SIGNAL</string>
     <string name="hud_audio_only">AUDIO ONLY</string>
+    <string name="audio_playback_channel">Audio playback</string>
+    <string name="audio_playback_title">Playing audio</string>
     <string name="hud_stats">Stream statistics</string>
     <string name="tool_grid">GRID</string>
     <string name="tool_zebra">ZEBRA</string>

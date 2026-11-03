@@ -7,6 +7,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.*;
 import android.widget.TextView;
@@ -73,6 +74,14 @@ public class StreamVideoActivity extends AppCompatActivity {
     private int lastVideoWidth;
 
     private boolean audioOnlyShown;
+
+    // unlike lastVideoWidth also set in viewer mode
+    private boolean videoReceived;
+
+    private boolean audioReceived;
+
+    // the stream was kept running when the screen went off
+    private boolean playingInBackground;
 
     private int lastVideoHeight;
 
@@ -664,6 +673,7 @@ public class StreamVideoActivity extends AppCompatActivity {
      * @param frameRate nominal or measured frames per second, or 0 if unknown
      */
     public void onVideoFormat(int width, int height, float frameRate, String format) {
+        videoReceived = true;
         if (viewerMode) {
             return;
         }
@@ -720,6 +730,7 @@ public class StreamVideoActivity extends AppCompatActivity {
      * @param receiving whether audio of the source has arrived
      */
     public void onAudioLevels(float left, float right, boolean receiving) {
+        audioReceived = receiving;
         if (hudShown) {
             viewBinding.audioMeterView.setLevels(left, right);
         }
@@ -786,6 +797,13 @@ public class StreamVideoActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
+        if (playingInBackground) {
+            // the stream kept playing while the screen was off
+            playingInBackground = false;
+            AudioPlaybackService.stop(this);
+            return;
+        }
+
         if (videoSource == null) {
             finish();
             return;
@@ -808,10 +826,39 @@ public class StreamVideoActivity extends AppCompatActivity {
         dismissToolSettings();
         dismissStats();
 
+        // A source without video keeps playing while the screen is off, there is nothing to watch anyway
+        if (runner != null && playsAudioOnlyWithScreenOff()) {
+            playingInBackground = true;
+            AudioPlaybackService.start(this, videoSource.getSourceName());
+            return;
+        }
+
         // The screen going off pauses the activity too. It stays open and onResume connects again.
         if (runner != null) {
             runner.stopStream();
             runner = null;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if (playingInBackground) {
+            playingInBackground = false;
+            AudioPlaybackService.stop(this);
+            // Destroyed with the stream still playing, e.g. recreated for the lock screen's orientation: the next
+            // instance starts its own. A runner that closed the activity itself has released everything already.
+            if (runner != null && !isFinishing()) {
+                runner.stopStream();
+                runner = null;
+            }
+        }
+    }
+
+    private boolean playsAudioOnlyWithScreenOff() {
+        PowerManager powerManager = getSystemService(PowerManager.class);
+        return videoSource instanceof NdiSource && audioReceived && !videoReceived
+                && new SettingsStore().isAudioEnabled() && !powerManager.isInteractive();
     }
 }
