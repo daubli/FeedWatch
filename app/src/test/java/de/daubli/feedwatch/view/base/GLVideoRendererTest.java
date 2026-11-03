@@ -34,4 +34,18 @@ public class GLVideoRendererTest {
 
         assertEquals(1, consumed.get());
     }
+
+    @Test
+    public void framesUpTo1440pAreConvertedAtTheirOwnSize() {
+        assertEquals(1, GLVideoRenderer.frameTextureDivisor(1280));
+        assertEquals(1, GLVideoRenderer.frameTextureDivisor(1920));
+        assertEquals(1, GLVideoRenderer.frameTextureDivisor(2560));
+    }
+
+    @Test
+    public void largerFramesAreShrunkByAPowerOfTwo() {
+        assertEquals(2, GLVideoRenderer.frameTextureDivisor(3840));
+        assertEquals(2, GLVideoRenderer.frameTextureDivisor(4096));
+        assertEquals(4, GLVideoRenderer.frameTextureDivisor(7680));
+    }
 }

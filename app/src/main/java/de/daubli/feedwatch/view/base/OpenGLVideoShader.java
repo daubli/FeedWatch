@@ -75,6 +75,7 @@ public class OpenGLVideoShader {
                     "uniform sampler2D uTex;" +
                     "uniform float uFrameWidth;" +   // full frame width in pixels
                     "uniform mat3 uYuvToRgb;" +      // BT.601, Rec. 709 or Rec. 2020, see yuvToRgbMatrix
+                    "uniform float uMeanOfPair;" +   // 1 to take the mean luma of both pixels, for shrunk frames
                     "varying vec2 vTexCoord;" +
                     "void main() {" +
                     "    float x = vTexCoord.x * uFrameWidth;" +      // pixel x in [0, frameWidth)
@@ -83,7 +84,7 @@ public class OpenGLVideoShader {
                     "    float texWidth = uFrameWidth / 2.0;" +
                     "    float texX = (macroX + 0.5) / texWidth;" +  // center of texel
                     "    vec4 t = texture2D(uTex, vec2(texX, vTexCoord.y));" +
-                    "    float Y = (isOdd < 0.5) ? t.g : t.a;" +
+                    "    float Y = mix((isOdd < 0.5) ? t.g : t.a, (t.g + t.a) * 0.5, uMeanOfPair);" +
                     // limited range to full range: Y 16..235 -> 0..1, Cb/Cr 16..240 -> -0.5..0.5
                     "    vec3 yuv = vec3(" +
                     "        (Y * 255.0 - 16.0) / 219.0," +

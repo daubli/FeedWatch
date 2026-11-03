@@ -14,10 +14,15 @@ import de.daubli.feedwatch.view.overlays.Overlay;
  * the local contrast, the brightest minus the darkest luma within {@link #RANGE_RADIUS} pixels. What is left depends
  * on how narrow the edge is, and that is what the threshold compares.
  * <p>
- * Two passes, across and then down, write the blurred luma and the local maximum and minimum into framebuffers the
- * size of the video rect: 13 + 13 + 14 texture reads a pixel instead of the 9 * 25 it took with the blur inside the
- * Sobel loop, which was too much for phone GPUs. Distances are counted in pixels of the video, so a stream shown
- * larger than its size, like the low bandwidth proxy, is judged by its own sharpness.
+ * The video is measured at its own size, not as shown: on a small screen details would be lost before the
+ * measurement, and a stream shown larger than its size, like the low bandwidth proxy, is judged by its own sharpness.
+ * The frame texture is shrunk to at most 2560 pixels wide, 4K to half its size, which keeps it affordable for phone
+ * GPUs.
+ * <p>
+ * Two passes, across and then down, write the blurred luma and the local maximum and minimum into framebuffers of
+ * the measured size: 13 + 13 + 14 texture reads a pixel instead of the 9 * 25 it took with the blur inside the Sobel
+ * loop, which was too much for phone GPUs. A third pass writes the edges into a mask of the same size, the last one
+ * draws the mask over the video rect.
  * <p>
  * The blur spreads the slope of an edge over several pixels, all of them as sharp. Only the steepest of them, along
  * the direction of the gradient, is marked, so the edges are drawn as thin lines and cover little of the picture.
@@ -44,8 +49,16 @@ public class FocusAssistOverlay extends Overlay {
     // in pixels of the video, wider than a sharp edge, the shaders unroll it
     private static final int RANGE_RADIUS = 6;
 
-    // in pixels of the screen, crops the video a bit, so the border of the video is not detected as an edge
-    private static final int BORDER_PIXELS = 4;
+    // a shrunk mask takes the strongest of up to this many texels across and down a screen pixel
+    private static final int MAX_FOOTPRINT = 4;
+
+    // exact texture coordinates for frames and masks up to 4K, the samples between texels need them
+    private static final String PRECISION =
+            "#ifdef GL_FRAGMENT_PRECISION_HIGH\n" +
+                    "precision highp float;\n" +
+                    "#else\n" +
+                    "precision mediump float;\n" +
+                    "#endif\n";
 
     // quad over the whole viewport: (left,top), (left,bottom), (right,top), (right,bottom)
     private static final float[] FULL_VERTICES = { -1f, 1f, -1f, -1f, 1f, 1f, 1f, -1f };
@@ -57,8 +70,6 @@ public class FocusAssistOverlay extends Overlay {
     private final FloatBuffer fullTexCoordBuffer;
 
     private final FloatBuffer vertexBuffer;
-
-    private final FloatBuffer texCoordBuffer;
 
     private final FloatBuffer monoTexCoordBuffer;
 
@@ -95,7 +106,19 @@ public class FocusAssistOverlay extends Overlay {
 
     private int edgeMinAlpha = -1;
 
-    private int edgeColorLocation = -1;
+    private int maskProgram = 0;
+
+    private int maskPosition = -1;
+
+    private int maskTexCoord = -1;
+
+    private int maskTexture = -1;
+
+    private int maskTexelCount = -1;
+
+    private int maskFootprint = -1;
+
+    private int maskColor = -1;
 
     private int monoProgram = 0;
 
@@ -105,10 +128,10 @@ public class FocusAssistOverlay extends Overlay {
 
     private int monoTexture = -1;
 
-    // [0] across, [1] across and down
-    private final int[] framebuffers = new int[2];
+    // [0] across, [1] across and down, [2] the edge mask
+    private final int[] framebuffers = new int[3];
 
-    private final int[] framebufferTextures = new int[2];
+    private final int[] framebufferTextures = new int[3];
 
     private int framebufferWidth = 0;
 
@@ -121,7 +144,9 @@ public class FocusAssistOverlay extends Overlay {
 
     private boolean monoBackground = false;
 
-    // size of the video frame, 0 while unknown
+    // the drawn frame in RGB at its own size, 0 while there is none
+    private int frameTexture = 0;
+
     private int frameWidth = 0;
 
     private int frameHeight = 0;
@@ -130,7 +155,6 @@ public class FocusAssistOverlay extends Overlay {
         fullVertexBuffer = floatBuffer(FULL_VERTICES);
         fullTexCoordBuffer = floatBuffer(FULL_TEX_COORDS);
         vertexBuffer = floatBuffer(new float[8]);
-        texCoordBuffer = floatBuffer(new float[8]);
         monoTexCoordBuffer = floatBuffer(new float[8]);
     }
 
@@ -151,7 +175,13 @@ public class FocusAssistOverlay extends Overlay {
     }
 
     @Override
-    public void setFrameSize(int width, int height) {
+    public boolean needsFrameTexture() {
+        return true;
+    }
+
+    @Override
+    public void setFrameTexture(int textureId, int width, int height) {
+        frameTexture = textureId;
         frameWidth = width;
         frameHeight = height;
     }
@@ -188,11 +218,11 @@ public class FocusAssistOverlay extends Overlay {
                         "  vTexCoord = aTexCoord;" +
                         "}";
 
-        // Along uStep, one pixel of the video: the 5 tap binomial blur of the luma into red, the largest and the
-        // smallest luma within RANGE_RADIUS pixels into green and blue. Across it reads the video, down the result
+        // Along uStep, one measured pixel: the 5 tap binomial blur of the luma into red, the largest and the
+        // smallest luma within RANGE_RADIUS pixels into green and blue. Across it reads the frame, down the result
         // of across.
         final String rangeAcrossShader =
-                "precision mediump float;" +
+                PRECISION +
                         "uniform sampler2D uTexture;" +
                         "uniform vec2 uStep;" +
                         "varying vec2 vTexCoord;" +
@@ -216,7 +246,7 @@ public class FocusAssistOverlay extends Overlay {
                         "}";
 
         final String rangeDownShader =
-                "precision mediump float;" +
+                PRECISION +
                         "uniform sampler2D uTexture;" +
                         "uniform vec2 uStep;" +
                         "varying vec2 vTexCoord;" +
@@ -239,19 +269,14 @@ public class FocusAssistOverlay extends Overlay {
         // Sobel over the blurred luma, divided by the local contrast: how narrow the edge is. Marked only where the
         // slope along the gradient is steeper than one pixel further and at least as steep as one pixel back, so of
         // two equally steep pixels one is marked. The samples along the gradient fall between texels and are
-        // filtered linearly, which needs exact texture coordinates: highp where the GPU has it.
+        // filtered linearly. Writes the opacity of the edge into all channels of the mask.
         final String edgeShader =
-                "#ifdef GL_FRAGMENT_PRECISION_HIGH\n" +
-                        "precision highp float;\n" +
-                        "#else\n" +
-                        "precision mediump float;\n" +
-                        "#endif\n" +
+                PRECISION +
                         "uniform sampler2D uTexture;" +
                         "uniform vec2 uTexelSize;" +
                         "uniform float uThreshold;" +
                         "uniform float uMinContrast;" +
                         "uniform float uMinAlpha;" +
-                        "uniform vec3 uEdgeColor;" +
                         "varying vec2 vTexCoord;" +
 
                         "float g(float x, float y) {" +
@@ -274,7 +299,7 @@ public class FocusAssistOverlay extends Overlay {
                         "  float strength = length(vec2(gx, gy));" +
                         "  float sharpness = strength / max(contrast, uMinContrast);" +
 
-                        // one pixel of the video along the gradient, its sign does not matter
+                        // one measured pixel along the gradient, its sign does not matter
                         "  vec2 n = vec2(gx, gy) / max(strength, 0.0001) * uTexelSize;" +
                         "  float slope = abs(at(n) - at(-n));" +
                         "  float slopeAhead = abs(at(2.0 * n) - range.r);" +
@@ -283,6 +308,35 @@ public class FocusAssistOverlay extends Overlay {
 
                         "  float alpha = (steepest && contrast >= uMinContrast && sharpness >= uThreshold)" +
                         "      ? clamp(uMinAlpha + (sharpness - uThreshold) / uThreshold, 0.0, 1.0) : 0.0;" +
+                        "  gl_FragColor = vec4(alpha);" +
+                        "}";
+
+        // The mask in the edge color over the video rect. Shown larger it is filtered linearly. Shown smaller a
+        // screen pixel covers several texels and takes the strongest of them, so thin edges do not break up.
+        final String maskShader =
+                PRECISION +
+                        "uniform sampler2D uTexture;" +
+                        "uniform vec2 uTexelCount;" +
+                        "uniform vec2 uFootprint;" +
+                        "uniform vec3 uEdgeColor;" +
+                        "varying vec2 vTexCoord;" +
+
+                        "void main() {" +
+                        "  float alpha = 0.0;" +
+                        "  if (uFootprint.x <= 1.0 && uFootprint.y <= 1.0) {" +
+                        "    alpha = texture2D(uTexture, vTexCoord).a;" +
+                        "  } else {" +
+                        "    vec2 first = floor(vTexCoord * uTexelCount - 0.5 * uFootprint);" +
+                        "    vec2 last = floor(vTexCoord * uTexelCount + 0.5 * uFootprint);" +
+                        "    for (int y = 0; y < " + MAX_FOOTPRINT + "; y++) {" +
+                        "      for (int x = 0; x < " + MAX_FOOTPRINT + "; x++) {" +
+                        "        vec2 texel = first + vec2(float(x), float(y));" +
+                        "        if (texel.x <= last.x && texel.y <= last.y) {" +
+                        "          alpha = max(alpha, texture2D(uTexture, (texel + 0.5) / uTexelCount).a);" +
+                        "        }" +
+                        "      }" +
+                        "    }" +
+                        "  }" +
                         "  gl_FragColor = vec4(uEdgeColor, alpha);" +
                         "}";
 
@@ -315,7 +369,14 @@ public class FocusAssistOverlay extends Overlay {
         edgeThreshold = GLES20.glGetUniformLocation(edgeProgram, "uThreshold");
         edgeMinContrast = GLES20.glGetUniformLocation(edgeProgram, "uMinContrast");
         edgeMinAlpha = GLES20.glGetUniformLocation(edgeProgram, "uMinAlpha");
-        edgeColorLocation = GLES20.glGetUniformLocation(edgeProgram, "uEdgeColor");
+
+        maskProgram = createProgram(vertexShader, maskShader);
+        maskPosition = GLES20.glGetAttribLocation(maskProgram, "aPosition");
+        maskTexCoord = GLES20.glGetAttribLocation(maskProgram, "aTexCoord");
+        maskTexture = GLES20.glGetUniformLocation(maskProgram, "uTexture");
+        maskTexelCount = GLES20.glGetUniformLocation(maskProgram, "uTexelCount");
+        maskFootprint = GLES20.glGetUniformLocation(maskProgram, "uFootprint");
+        maskColor = GLES20.glGetUniformLocation(maskProgram, "uEdgeColor");
 
         monoProgram = createProgram(vertexShader, monoShader);
         monoPosition = GLES20.glGetAttribLocation(monoProgram, "aPosition");
@@ -332,51 +393,55 @@ public class FocusAssistOverlay extends Overlay {
     @Override
     public void draw(int videoTextureId, int videoRectLeft, int videoRectTop, int videoRectWidth, int videoRectHeight,
             int surfaceWidth, int surfaceHeight) {
-        // the measured rect, the video rect without its border. Measured and marked pixel for pixel, so the thin
-        // edges lie exactly on the picture.
-        int left = videoRectLeft + BORDER_PIXELS;
-        int top = videoRectTop + BORDER_PIXELS;
-        int width = videoRectWidth - 2 * BORDER_PIXELS;
-        int height = videoRectHeight - 2 * BORDER_PIXELS;
-        if (width <= 0 || height <= 0) {
+        if (frameTexture == 0 || videoRectWidth <= 0 || videoRectHeight <= 0) {
             return;
         }
 
+        // measured pixel for pixel of the frame texture
+        int width = frameWidth;
+        int height = frameHeight;
+
         initGL();
         ensureFramebuffers(width, height);
-
-        // screen pixels per pixel of the video: a video shown larger is judged at its own size
-        float pixelScale = frameWidth > 0 ? Math.max(1f, (float) videoRectWidth / frameWidth) : 1f;
 
         GLES20.glDisable(GLES20.GL_BLEND);
         GLES20.glViewport(0, 0, width, height);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
 
-        // 1) across: the measured rect of the surface-sized FBO texture into framebuffer 0
-        updateVideoTexCoords(texCoordBuffer, left, top, width, height, surfaceWidth, surfaceHeight);
+        // 1) across: the frame into framebuffer 0. Both have their top row at the top of the viewport.
         GLES20.glUseProgram(rangePrograms[0]);
         GLES20.glUniform1i(rangeTextures[0], 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[0]);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, videoTextureId);
-        GLES20.glUniform2f(rangeSteps[0], pixelScale / surfaceWidth, 0f);
-        drawQuad(rangePositions[0], rangeTexCoords[0], fullVertexBuffer, texCoordBuffer);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, frameTexture);
+        GLES20.glUniform2f(rangeSteps[0], 1f / width, 0f);
+        drawQuad(rangePositions[0], rangeTexCoords[0], fullVertexBuffer, fullTexCoordBuffer);
 
         // 2) down: framebuffer 0 into framebuffer 1
         GLES20.glUseProgram(rangePrograms[1]);
         GLES20.glUniform1i(rangeTextures[1], 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[1]);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[0]);
-        GLES20.glUniform2f(rangeSteps[1], 0f, pixelScale / height);
+        GLES20.glUniform2f(rangeSteps[1], 0f, 1f / height);
         drawQuad(rangePositions[1], rangeTexCoords[1], fullVertexBuffer, fullTexCoordBuffer);
 
-        // 3) edges of framebuffer 1, blended over the measured rect on screen
+        // 3) edges of framebuffer 1 into the mask
+        GLES20.glUseProgram(edgeProgram);
+        GLES20.glUniform1i(edgeTexture, 0);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[2]);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[1]);
+        GLES20.glUniform2f(edgeTexelSize, 1f / width, 1f / height);
+        GLES20.glUniform1f(edgeThreshold, threshold);
+        GLES20.glUniform1f(edgeMinContrast, MIN_CONTRAST);
+        GLES20.glUniform1f(edgeMinAlpha, MIN_EDGE_ALPHA);
+        drawQuad(edgePosition, edgeTexCoord, fullVertexBuffer, fullTexCoordBuffer);
+
+        // 4) on screen: the gray background if wanted, then the mask over the video rect
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
+        updateVideoVertices(videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight, surfaceWidth,
+                surfaceHeight);
 
         if (monoBackground) {
-            // the gray video covers the colored one exactly, so it is not cropped
-            updateVideoVertices(videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight, surfaceWidth,
-                    surfaceHeight);
             updateVideoTexCoords(monoTexCoordBuffer, videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight,
                     surfaceWidth, surfaceHeight);
             GLES20.glUseProgram(monoProgram);
@@ -385,19 +450,16 @@ public class FocusAssistOverlay extends Overlay {
             drawQuad(monoPosition, monoTexCoord, vertexBuffer, monoTexCoordBuffer);
         }
 
-        updateVideoVertices(left, top, width, height, surfaceWidth, surfaceHeight);
-        GLES20.glUseProgram(edgeProgram);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[1]);
-        GLES20.glUniform1i(edgeTexture, 0);
-        GLES20.glUniform2f(edgeTexelSize, pixelScale / width, pixelScale / height);
-        GLES20.glUniform1f(edgeThreshold, threshold);
-        GLES20.glUniform1f(edgeMinContrast, MIN_CONTRAST);
-        GLES20.glUniform1f(edgeMinAlpha, MIN_EDGE_ALPHA);
-        GLES20.glUniform3f(edgeColorLocation, edgeColor[0], edgeColor[1], edgeColor[2]);
+        GLES20.glUseProgram(maskProgram);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[2]);
+        GLES20.glUniform1i(maskTexture, 0);
+        GLES20.glUniform2f(maskTexelCount, width, height);
+        GLES20.glUniform2f(maskFootprint, (float) width / videoRectWidth, (float) height / videoRectHeight);
+        GLES20.glUniform3f(maskColor, edgeColor[0], edgeColor[1], edgeColor[2]);
 
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-        drawQuad(edgePosition, edgeTexCoord, vertexBuffer, fullTexCoordBuffer);
+        drawQuad(maskPosition, maskTexCoord, vertexBuffer, fullTexCoordBuffer);
         GLES20.glDisable(GLES20.GL_BLEND);
     }
 
@@ -466,18 +528,19 @@ public class FocusAssistOverlay extends Overlay {
             return;
         }
         if (framebufferWidth > 0) {
-            GLES20.glDeleteFramebuffers(2, framebuffers, 0);
-            GLES20.glDeleteTextures(2, framebufferTextures, 0);
+            GLES20.glDeleteFramebuffers(3, framebuffers, 0);
+            GLES20.glDeleteTextures(3, framebufferTextures, 0);
         }
 
-        GLES20.glGenTextures(2, framebufferTextures, 0);
-        GLES20.glGenFramebuffers(2, framebuffers, 0);
-        for (int i = 0; i < 2; i++) {
+        GLES20.glGenTextures(3, framebufferTextures, 0);
+        GLES20.glGenFramebuffers(3, framebuffers, 0);
+        for (int i = 0; i < 3; i++) {
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[i]);
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0, GLES20.GL_RGBA,
                     GLES20.GL_UNSIGNED_BYTE, null);
-            // one texel per pixel, but the edges sample framebuffer 1 between texels along the gradient
-            int filter = i == 1 ? GLES20.GL_LINEAR : GLES20.GL_NEAREST;
+            // one texel per pixel, but the edges sample framebuffer 1 between texels along the gradient, and the
+            // mask is scaled to the video rect
+            int filter = i == 0 ? GLES20.GL_NEAREST : GLES20.GL_LINEAR;
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, filter);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, filter);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
