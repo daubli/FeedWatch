@@ -15,9 +15,12 @@ import de.daubli.feedwatch.view.overlays.Overlay;
  * on how narrow the edge is, and that is what the threshold compares.
  * <p>
  * Two passes, across and then down, write the blurred luma and the local maximum and minimum into framebuffers the
- * size of the video rect: 13 + 13 + 10 texture reads a pixel instead of the 9 * 25 it took with the blur inside the
+ * size of the video rect: 13 + 13 + 14 texture reads a pixel instead of the 9 * 25 it took with the blur inside the
  * Sobel loop, which was too much for phone GPUs. Distances are counted in pixels of the video, so a stream shown
  * larger than its size, like the low bandwidth proxy, is judged by its own sharpness.
+ * <p>
+ * The blur spreads the slope of an edge over several pixels, all of them as sharp. Only the steepest of them, along
+ * the direction of the gradient, is marked, so the edges are drawn as thin lines and cover little of the picture.
  * <p>
  * With a mono background the video rect is painted in its luma before the edges are drawn, so they stand out on
  * pictures in any color.
@@ -31,6 +34,9 @@ public class FocusAssistOverlay extends Overlay {
     private static final float STRICTEST_THRESHOLD = 1.9f;
 
     private static final float MOST_SENSITIVE_THRESHOLD = 0.85f;
+
+    // opacity of an edge right at the threshold, more above it
+    private static final float MIN_EDGE_ALPHA = 0.8f;
 
     // below this contrast the luma is too flat to tell an edge from noise
     private static final float MIN_CONTRAST = 0.08f;
@@ -86,6 +92,8 @@ public class FocusAssistOverlay extends Overlay {
     private int edgeThreshold = -1;
 
     private int edgeMinContrast = -1;
+
+    private int edgeMinAlpha = -1;
 
     private int edgeColorLocation = -1;
 
@@ -228,18 +236,30 @@ public class FocusAssistOverlay extends Overlay {
                         "  gl_FragColor = vec4((c.r * 6.0 + (a1.r + b1.r) * 4.0 + a2.r + b2.r) * 0.0625, hi, lo, 1.0);" +
                         "}";
 
-        // Sobel over the blurred luma, divided by the local contrast: how narrow the edge is
+        // Sobel over the blurred luma, divided by the local contrast: how narrow the edge is. Marked only where the
+        // slope along the gradient is steeper than one pixel further and at least as steep as one pixel back, so of
+        // two equally steep pixels one is marked. The samples along the gradient fall between texels and are
+        // filtered linearly, which needs exact texture coordinates: highp where the GPU has it.
         final String edgeShader =
-                "precision mediump float;" +
+                "#ifdef GL_FRAGMENT_PRECISION_HIGH\n" +
+                        "precision highp float;\n" +
+                        "#else\n" +
+                        "precision mediump float;\n" +
+                        "#endif\n" +
                         "uniform sampler2D uTexture;" +
                         "uniform vec2 uTexelSize;" +
                         "uniform float uThreshold;" +
                         "uniform float uMinContrast;" +
+                        "uniform float uMinAlpha;" +
                         "uniform vec3 uEdgeColor;" +
                         "varying vec2 vTexCoord;" +
 
                         "float g(float x, float y) {" +
                         "  return texture2D(uTexture, vTexCoord + vec2(x, y) * uTexelSize).r;" +
+                        "}" +
+
+                        "float at(vec2 offset) {" +
+                        "  return texture2D(uTexture, vTexCoord + offset).r;" +
                         "}" +
 
                         "void main() {" +
@@ -251,9 +271,18 @@ public class FocusAssistOverlay extends Overlay {
 
                         "  vec4 range = texture2D(uTexture, vTexCoord);" +
                         "  float contrast = range.g - range.b;" +
-                        "  float sharpness = length(vec2(gx, gy)) / max(contrast, uMinContrast);" +
-                        "  float alpha = (contrast >= uMinContrast && sharpness >= uThreshold)" +
-                        "      ? clamp(0.6 + (sharpness - uThreshold) / uThreshold, 0.0, 1.0) : 0.0;" +
+                        "  float strength = length(vec2(gx, gy));" +
+                        "  float sharpness = strength / max(contrast, uMinContrast);" +
+
+                        // one pixel of the video along the gradient, its sign does not matter
+                        "  vec2 n = vec2(gx, gy) / max(strength, 0.0001) * uTexelSize;" +
+                        "  float slope = abs(at(n) - at(-n));" +
+                        "  float slopeAhead = abs(at(2.0 * n) - range.r);" +
+                        "  float slopeBehind = abs(range.r - at(-2.0 * n));" +
+                        "  bool steepest = slope > slopeAhead && slope >= slopeBehind;" +
+
+                        "  float alpha = (steepest && contrast >= uMinContrast && sharpness >= uThreshold)" +
+                        "      ? clamp(uMinAlpha + (sharpness - uThreshold) / uThreshold, 0.0, 1.0) : 0.0;" +
                         "  gl_FragColor = vec4(uEdgeColor, alpha);" +
                         "}";
 
@@ -285,6 +314,7 @@ public class FocusAssistOverlay extends Overlay {
         edgeTexelSize = GLES20.glGetUniformLocation(edgeProgram, "uTexelSize");
         edgeThreshold = GLES20.glGetUniformLocation(edgeProgram, "uThreshold");
         edgeMinContrast = GLES20.glGetUniformLocation(edgeProgram, "uMinContrast");
+        edgeMinAlpha = GLES20.glGetUniformLocation(edgeProgram, "uMinAlpha");
         edgeColorLocation = GLES20.glGetUniformLocation(edgeProgram, "uEdgeColor");
 
         monoProgram = createProgram(vertexShader, monoShader);
@@ -356,6 +386,7 @@ public class FocusAssistOverlay extends Overlay {
         GLES20.glUniform2f(edgeTexelSize, pixelScale / videoRectWidth, pixelScale / videoRectHeight);
         GLES20.glUniform1f(edgeThreshold, threshold);
         GLES20.glUniform1f(edgeMinContrast, MIN_CONTRAST);
+        GLES20.glUniform1f(edgeMinAlpha, MIN_EDGE_ALPHA);
         GLES20.glUniform3f(edgeColorLocation, edgeColor[0], edgeColor[1], edgeColor[2]);
 
         GLES20.glEnable(GLES20.GL_BLEND);
@@ -441,9 +472,10 @@ public class FocusAssistOverlay extends Overlay {
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[i]);
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0, GLES20.GL_RGBA,
                     GLES20.GL_UNSIGNED_BYTE, null);
-            // one texel per pixel, the filter only matters at the clamped edges
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+            // one texel per pixel, but the edges sample framebuffer 1 between texels along the gradient
+            int filter = i == 1 ? GLES20.GL_LINEAR : GLES20.GL_NEAREST;
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, filter);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, filter);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
 
