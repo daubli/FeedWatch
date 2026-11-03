@@ -58,6 +58,9 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     private int frameHeight;
 
+    // bytes from one row to the next, 0 for rows without padding
+    private int frameLineStride;
+
     private FourCCType frameType;
 
     private boolean frameAvailable;
@@ -156,6 +159,9 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     private FourCCType texType = null;
 
+    // the rows of a padded frame without their padding, reused (GL thread only)
+    private ByteBuffer packedFrame;
+
     public GLVideoRenderer() {
         vertexBuffer = ByteBuffer.allocateDirect(VERTEX_FLOATS * BYTES_PER_FLOAT).order(ByteOrder.nativeOrder())
                 .asFloatBuffer();
@@ -177,6 +183,15 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
 
     /** onConsumed runs once the buffer was uploaded or replaced and may be reused */
     public void render(ByteBuffer buffer, int width, int height, FourCCType type, Runnable onConsumed) {
+        render(buffer, width, height, 0, type, onConsumed);
+    }
+
+    /**
+     * lineStride: bytes from the start of one row to the next, 0 for rows without padding. NDI pads the rows of
+     * frames whose width is not a multiple of its alignment, e.g. 1080 pixels.
+     */
+    public void render(ByteBuffer buffer, int width, int height, int lineStride, FourCCType type,
+            Runnable onConsumed) {
         synchronized (lock) {
             if (pendingConsumedCallback != null) {
                 // previous frame was never uploaded
@@ -185,6 +200,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
             pendingFrame = buffer;
             frameWidth = width;
             frameHeight = height;
+            frameLineStride = lineStride;
             frameType = type;
             pendingConsumedCallback = onConsumed;
             frameAvailable = true;
@@ -302,7 +318,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
 
         final ByteBuffer frame;
-        final int w, h;
+        final int w, h, lineStride;
         final FourCCType type;
         final Runnable consumedCallback;
 
@@ -312,6 +328,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
                 frame = pendingFrame;
                 w = frameWidth;
                 h = frameHeight;
+                lineStride = frameLineStride;
                 type = frameType;
                 consumedCallback = pendingConsumedCallback;
                 pendingConsumedCallback = null;
@@ -320,6 +337,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
                 frame = null;
                 w = 0;
                 h = 0;
+                lineStride = 0;
                 type = null;
                 consumedCallback = null;
             }
@@ -333,7 +351,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
             return;
         }
 
-        uploadFrame(frame, type, w, h);
+        uploadFrame(frame, type, w, h, lineStride);
         uploadCount++;
         if (consumedCallback != null) {
             consumedCallback.run();
@@ -443,7 +461,7 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
         return true;
     }
 
-    private void uploadFrame(ByteBuffer frame, FourCCType type, int w, int h) {
+    private void uploadFrame(ByteBuffer frame, FourCCType type, int w, int h, int lineStride) {
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
 
         // For UYVY: we upload as RGBA where each RGBA pixel packs 2 original pixels (UYVY = 4 bytes per 2 pixels)
@@ -460,9 +478,35 @@ public class GLVideoRenderer implements GLSurfaceView.Renderer {
                     GLES20.GL_UNSIGNED_BYTE, null);
         }
 
-        frame.rewind(); // ensure position=0 for upload
+        ByteBuffer pixels = frame;
+        int rowBytes = texW * 4;
+        if (lineStride > rowBytes) {
+            // GLES 2 cannot skip the padding at the end of each row, so the rows are packed first
+            if (packedFrame == null || packedFrame.capacity() < rowBytes * texH) {
+                packedFrame = ByteBuffer.allocateDirect(rowBytes * texH);
+            }
+            packRows(frame, rowBytes, lineStride, texH, packedFrame);
+            pixels = packedFrame;
+        } else {
+            frame.rewind(); // ensure position=0 for upload
+        }
         GLES20.glTexSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, texW, texH, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
-                frame);
+                pixels);
+    }
+
+    /**
+     * Copies {@code rows} rows of {@code rowBytes} each, which start {@code lineStride} bytes apart in
+     * {@code source}, into {@code target} without the padding between them. Leaves {@code target} ready to be read
+     * from its start, {@code source} as it was.
+     */
+    static void packRows(ByteBuffer source, int rowBytes, int lineStride, int rows, ByteBuffer target) {
+        ByteBuffer row = source.duplicate();
+        target.clear();
+        for (int y = 0; y < rows; y++) {
+            row.limit(y * lineStride + rowBytes).position(y * lineStride);
+            target.put(row);
+        }
+        target.flip();
     }
 
     /** meanOfPair: for a frame drawn at half its width or less, UYVY takes the mean luma of a pixel pair */

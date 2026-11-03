@@ -18,6 +18,10 @@ extern "C" {
         return reinterpret_cast<NDIlib_video_frame_v2_t *>(pFrame)->yres;
     }
 
+    JNIEXPORT jint JNICALL Java_de_daubli_feedwatch_ndi_NdiVideoFrame_getLineStride(JNIEnv *env, jclass jClazz, jlong pFrame) {
+        return reinterpret_cast<NDIlib_video_frame_v2_t *>(pFrame)->line_stride_in_bytes;
+    }
+
     JNIEXPORT jint JNICALL Java_de_daubli_feedwatch_ndi_NdiVideoFrame_getFourCCType(JNIEnv *env, jclass jClazz, jlong pFrame) {
         return reinterpret_cast<NDIlib_video_frame_v2_t *>(pFrame)->FourCC;
     }
