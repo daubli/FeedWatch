@@ -337,6 +337,10 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 if (firstFramePending) {
                     videoView.setVisibility(View.VISIBLE);
                     firstFramePending = false;
+                    // only a few frames can wait for their audio
+                    if (audioPlayer != null) {
+                        audioPlayer.limitBufferForVideo();
+                    }
                 }
 
                 try {

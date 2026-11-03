@@ -17,11 +17,13 @@ namespace {
 const char *TAG = "NdiAudioPlayer";
 
 // Jitter buffer: playback starts once this much audio is buffered, so packets held back by Wi-Fi for a moment do not
-// empty it. Each time it runs empty anyway the target grows, up to a limit: the video waits for its audio, and the
-// frames pending for it are limited.
+// empty it. Each time it runs empty anyway the target grows, up to a limit. With video the limit is low: the video
+// waits for its audio, and the frames pending for it are limited. A source without video may buffer more: a Mac
+// sending over Wi-Fi holds packets back for up to ~300 ms.
 const int32_t BUFFER_INITIAL_MS = 100;
 const int32_t BUFFER_STEP_MS = 50;
-const int32_t BUFFER_MAX_MS = 200;
+const int32_t BUFFER_MAX_MS = 500;
+const int32_t BUFFER_MAX_WITH_VIDEO_MS = 200;
 
 // On a steady connection the target shrinks again: after a window without running empty, if the deepest dip of the
 // level in it plus a margin also fits into the smaller target. Wi-Fi gaps come in rarer, larger ones too: if the
@@ -210,7 +212,7 @@ public:
             averageLevel = buffered;
         } else if (buffered < needed) {
             underruns.fetch_add(1, std::memory_order_relaxed);
-            int32_t largerMs = std::min(targetMs + BUFFER_STEP_MS, BUFFER_MAX_MS);
+            int32_t largerMs = std::min(targetMs + BUFFER_STEP_MS, bufferMaxMs.load(std::memory_order_relaxed));
             bufferTargetMs.store(largerMs, std::memory_order_relaxed);
             if (lastShrinkAt != 0 && playedAt - lastShrinkAt < 2 * shrinkWindowNanos) {
                 // shrunk too early
@@ -302,6 +304,18 @@ public:
         stream.reset();
         if (!stopped && error == oboe::Result::ErrorDisconnected) {
             openLocked();
+        }
+    }
+
+    /**
+     * Lowers the buffer's limit for a source that also sends video: the video waits for its audio.
+     */
+    void limitBufferForVideo() {
+        bufferMaxMs.store(BUFFER_MAX_WITH_VIDEO_MS, std::memory_order_relaxed);
+        int32_t targetMs = bufferTargetMs.load(std::memory_order_relaxed);
+        while (targetMs > BUFFER_MAX_WITH_VIDEO_MS
+                && !bufferTargetMs.compare_exchange_weak(targetMs, BUFFER_MAX_WITH_VIDEO_MS,
+                        std::memory_order_relaxed)) {
         }
     }
 
@@ -485,6 +499,7 @@ private:
     float previousRight = 0.f;
 
     std::atomic<int32_t> bufferTargetMs{BUFFER_INITIAL_MS};
+    std::atomic<int32_t> bufferMaxMs{BUFFER_MAX_MS};
     std::atomic<int32_t> bufferedMillis{0};
     std::atomic<int64_t> underruns{0};
 
@@ -524,6 +539,11 @@ extern "C" {
     JNIEXPORT void JNICALL
     Java_de_daubli_feedwatch_ndi_NdiAudioPlayer_stop(JNIEnv *env, jclass jClazz, jlong pPlayer) {
         reinterpret_cast<AudioPlayer *>(pPlayer)->stop();
+    }
+
+    JNIEXPORT void JNICALL
+    Java_de_daubli_feedwatch_ndi_NdiAudioPlayer_limitBufferForVideo(JNIEnv *env, jclass jClazz, jlong pPlayer) {
+        reinterpret_cast<AudioPlayer *>(pPlayer)->limitBufferForVideo();
     }
 
     JNIEXPORT void JNICALL
