@@ -139,6 +139,18 @@ public class OpenGLVideoView extends GLSurfaceView {
         requestRender();
     }
 
+    /**
+     * Shows the video in gray behind the focus peaking edges, or in color.
+     */
+    public void setFocusPeakingMono(boolean mono) {
+        if (focusAssistOverlay == null) {
+            return;
+        }
+
+        queueEvent(() -> focusAssistOverlay.setMonoBackground(mono));
+        requestRender();
+    }
+
     public void setZebraThreshold(int percent) {
         if (zebraOverlay == null) {
             return;

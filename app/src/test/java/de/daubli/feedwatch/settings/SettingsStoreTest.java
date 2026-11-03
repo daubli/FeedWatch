@@ -45,6 +45,7 @@ public class SettingsStoreTest {
         assertFalse(store.isFocusAssistEnabled());
         assertEquals(FocusPeakingColor.RED, store.getFocusPeakingColor());
         assertEquals(50, store.getFocusPeakingSensitivity());
+        assertFalse(store.isFocusPeakingMono());
         assertFalse(store.isZebraEnabled());
         assertEquals(95, store.getZebraThreshold());
 
@@ -105,6 +106,7 @@ public class SettingsStoreTest {
     public void switchesAreStored() {
         store.setFramingHelperOverlayEnabled(true);
         store.setFocusAssistEnabled(true);
+        store.setFocusPeakingMono(true);
         store.setZebraEnabled(true);
         store.setWaveformEnabled(true);
         store.setVectorscopeEnabled(true);
@@ -116,6 +118,7 @@ public class SettingsStoreTest {
         SettingsStore reloaded = new SettingsStore();
         assertTrue(reloaded.isFramingHelperOverlayEnabled());
         assertTrue(reloaded.isFocusAssistEnabled());
+        assertTrue(reloaded.isFocusPeakingMono());
         assertTrue(reloaded.isZebraEnabled());
         assertTrue(reloaded.isWaveformEnabled());
         assertTrue(reloaded.isVectorscopeEnabled());
