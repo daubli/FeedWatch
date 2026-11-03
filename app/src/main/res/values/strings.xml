@@ -66,6 +66,9 @@
     <string name="peaking_settings_title">Focus peaking</string>
     <string name="peaking_settings_color">Color</string>
     <string name="peaking_settings_sensitivity">Sensitivity</string>
+    <string name="peaking_settings_background">Background</string>
+    <string name="peaking_background_color">Color</string>
+    <string name="peaking_background_mono">Mono</string>
     <string name="zebra_settings_title">Zebra</string>
     <string name="zebra_settings_threshold">Threshold</string>
     <string name="percent_value">%1$d%%</string>
@@ -114,6 +117,7 @@
     <string name="color_white">White</string>
     <string name="color_red">Red</string>
     <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
     <string name="color_blue">Blue</string>
     <string name="audio_right">R</string>
 </resources>

@@ -6,13 +6,15 @@ import de.daubli.feedwatch.R;
 
 /**
  * Colors focus peaking can draw edges in. Offered so the edges stay visible on pictures that are mostly red,
- * yellow or blue themselves.
+ * yellow, green or blue themselves. White stands out best on the mono background.
  */
 public enum FocusPeakingColor {
 
     RED(0xFFFF2D2D, R.string.color_red),
     YELLOW(0xFFFFE01A, R.string.color_yellow),
-    BLUE(0xFF2D8CFF, R.string.color_blue);
+    GREEN(0xFF2DFF5A, R.string.color_green),
+    BLUE(0xFF2D8CFF, R.string.color_blue),
+    WHITE(0xFFFFFFFF, R.string.color_white);
 
     @ColorInt
     private final int color;

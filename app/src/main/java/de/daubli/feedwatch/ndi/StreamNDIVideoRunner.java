@@ -354,10 +354,12 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                     // read everything up front, the frame may be recycled as soon as it is handed to GL
                     int width = frame.getXResolution();
                     int height = frame.getYResolution();
+                    int lineStride = frame.getLineStrideInBytes();
                     FourCCType fourCCType = frame.getFourCCType();
                     float frameRate = frameRate(frame);
 
-                    videoView.updateFrame(frame.getData(), width, height, fourCCType, () -> recycleFrame(frame));
+                    videoView.updateFrame(frame.getData(), width, height, lineStride, fourCCType,
+                            () -> recycleFrame(frame));
                     shownFrames++;
                     activity.onVideoFormat(width, height, frameRate, fourCCType.name());
 

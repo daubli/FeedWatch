@@ -12,6 +12,7 @@ import android.util.Log;
 import android.view.*;
 import android.widget.TextView;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.ToIntFunction;
@@ -158,6 +159,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         SettingsStore settingsStore = new SettingsStore();
         viewBinding.openGLVideoView.setFocusPeakingColor(settingsStore.getFocusPeakingColor().getColor());
         viewBinding.openGLVideoView.setFocusPeakingSensitivity(settingsStore.getFocusPeakingSensitivity());
+        viewBinding.openGLVideoView.setFocusPeakingMono(settingsStore.isFocusPeakingMono());
         viewBinding.openGLVideoView.setZebraThreshold(settingsStore.getZebraThreshold());
         applyFramingGuides(settingsStore);
         viewBinding.waveformMonitorView.setMode(settingsStore.getWaveformMode());
@@ -442,6 +444,17 @@ public class StreamVideoActivity extends AppCompatActivity {
                             settingsStore.setFocusPeakingSensitivity(value);
                             viewBinding.openGLVideoView.setFocusPeakingSensitivity(value);
                             // the marked edges show the sensitivity, so they are needed while setting it
+                            if (!settingsStore.isFocusAssistEnabled()) {
+                                setFocusAssistEnabled(true);
+                            }
+                        })
+                .addChoices(getString(R.string.peaking_settings_background),
+                        Arrays.asList(ToolSettingsPopup.Choice.text(getString(R.string.peaking_background_color)),
+                                ToolSettingsPopup.Choice.text(getString(R.string.peaking_background_mono))),
+                        settingsStore.isFocusPeakingMono() ? 1 : 0, index -> {
+                            settingsStore.setFocusPeakingMono(index == 1);
+                            viewBinding.openGLVideoView.setFocusPeakingMono(index == 1);
+                            // like the color, the background is only visible with peaking on
                             if (!settingsStore.isFocusAssistEnabled()) {
                                 setFocusAssistEnabled(true);
                             }

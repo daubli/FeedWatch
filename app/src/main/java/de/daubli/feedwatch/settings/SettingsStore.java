@@ -46,6 +46,8 @@ public class SettingsStore {
     private static final String FOCUS_PEAKING_SENSITIVITY_KEY =
             "de.daubli.feedwatch.view.overlays.focusassist.sensitivity";
 
+    private static final String FOCUS_PEAKING_MONO_KEY = "de.daubli.feedwatch.view.overlays.focusassist.mono";
+
     private static final String ZEBRA_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.zebra.enabled";
 
     private static final String ZEBRA_THRESHOLD_KEY = "de.daubli.feedwatch.view.overlays.zebra.threshold";
@@ -243,6 +245,19 @@ public class SettingsStore {
     public void setFocusPeakingSensitivity(int percent) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt(FOCUS_PEAKING_SENSITIVITY_KEY, percent);
+        editor.apply();
+    }
+
+    /**
+     * Whether focus peaking shows the video in gray behind the edges, off by default.
+     */
+    public boolean isFocusPeakingMono() {
+        return sharedPreferences.getBoolean(FOCUS_PEAKING_MONO_KEY, false);
+    }
+
+    public void setFocusPeakingMono(boolean mono) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(FOCUS_PEAKING_MONO_KEY, mono);
         editor.apply();
     }
 
