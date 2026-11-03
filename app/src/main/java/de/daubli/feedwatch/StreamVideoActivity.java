@@ -27,6 +27,7 @@ import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.sources.VideoSource;
 import de.daubli.feedwatch.uvc.StreamUvcVideoRunner;
 import de.daubli.feedwatch.uvc.UVCSource;
+import de.daubli.feedwatch.view.SystemInsets;
 import de.daubli.feedwatch.view.hud.StreamStatsPopup;
 import de.daubli.feedwatch.view.hud.ToolSettingsPopup;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
@@ -95,6 +96,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         viewBinding = StreamVideoActivityBinding.inflate(getLayoutInflater());
         setContentView(viewBinding.getRoot());
+        SystemInsets.padForDisplayCutout(viewBinding.getRoot());
 
         videoSource = resolveVideoSource(getIntent());
         viewerMode = new SettingsStore().isViewerModeEnabled();
