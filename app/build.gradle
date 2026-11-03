@@ -47,7 +47,8 @@ android {
             cmake {
                 cppFlags "-std=c++17"
                 // required by the Oboe prefab package; libndi links its own C++ runtime statically
-                arguments "-DANDROID_STL=c++_shared"
+                // flexible page sizes align libndi-wrapper.so to 16 KB for devices with 16 KB pages (Android 17)
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
             }
         }
     }
@@ -60,6 +61,14 @@ android {
     }
 
     ndkVersion "27.3.13750724"
+
+    packagingOptions {
+        jniLibs {
+            // AGP 7 aligns uncompressed native libraries in the APK to 4 KB only, which devices with 16 KB pages
+            // reject. Compressed libraries are extracted on install, so only their LOAD segments need 16 KB.
+            useLegacyPackaging true
+        }
+    }
 
     buildTypes {
         release {
