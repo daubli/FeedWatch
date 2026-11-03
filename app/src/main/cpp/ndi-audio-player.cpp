@@ -310,6 +310,10 @@ public:
         right = peakRight.exchange(0.f, std::memory_order_relaxed);
     }
 
+    bool isReceiving() const {
+        return receivedSampleRate.load(std::memory_order_acquire) > 0;
+    }
+
     /**
      * Writes the jitter buffer's target and what is buffered now (both in milliseconds), how often it ran empty and
      * how many audio frames the receiver dropped.
@@ -528,6 +532,11 @@ extern "C" {
         float peaks[2];
         reinterpret_cast<AudioPlayer *>(pPlayer)->takePeaks(peaks[0], peaks[1]);
         env->SetFloatArrayRegion(jPeaks, 0, 2, peaks);
+    }
+
+    JNIEXPORT jboolean JNICALL
+    Java_de_daubli_feedwatch_ndi_NdiAudioPlayer_isReceiving(JNIEnv *env, jclass jClazz, jlong pPlayer) {
+        return reinterpret_cast<AudioPlayer *>(pPlayer)->isReceiving();
     }
 
     JNIEXPORT void JNICALL

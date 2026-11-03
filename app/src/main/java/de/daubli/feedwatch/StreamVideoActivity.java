@@ -72,6 +72,8 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private int lastVideoWidth;
 
+    private boolean audioOnlyShown;
+
     private int lastVideoHeight;
 
     private float lastFrameRate = -1f;
@@ -714,10 +716,17 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     /**
      * Called on the main thread once per display frame with linear peak levels (0..1).
+     *
+     * @param receiving whether audio of the source has arrived
      */
-    public void onAudioLevels(float left, float right) {
+    public void onAudioLevels(float left, float right, boolean receiving) {
         if (hudShown) {
             viewBinding.audioMeterView.setLevels(left, right);
+        }
+        // until the first video frame the resolution chip says there is no signal, audio is a signal too
+        if (receiving && !audioOnlyShown && lastVideoWidth == 0 && !viewerMode) {
+            audioOnlyShown = true;
+            viewBinding.resolutionChip.setText(R.string.hud_audio_only);
         }
     }
 

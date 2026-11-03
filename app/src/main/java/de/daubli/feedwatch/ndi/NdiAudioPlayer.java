@@ -35,6 +35,13 @@ public class NdiAudioPlayer implements AutoCloseable {
     }
 
     /**
+     * @return true once audio of the source has arrived
+     */
+    public boolean isReceiving() {
+        return isReceiving(instancePointer);
+    }
+
+    /**
      * @return the time from audio arriving in the frame sync to hearing it, jitter buffer included, or -1 if not
      *         known (yet)
      */
@@ -64,6 +71,8 @@ public class NdiAudioPlayer implements AutoCloseable {
     private static native void stop(long pPlayer);
 
     private static native void takePeaks(long pPlayer, float[] peaks);
+
+    private static native boolean isReceiving(long pPlayer);
 
     private static native long outputLatencyNanos(long pPlayer);
 

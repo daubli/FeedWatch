@@ -328,7 +328,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             long delayNanos = 0;
             if (audioEnabled) {
                 audioPlayer.takePeaks(audioPeaks);
-                activity.onAudioLevels(audioPeaks[0], audioPeaks[1]);
+                activity.onAudioLevels(audioPeaks[0], audioPeaks[1], audioPlayer.isReceiving());
                 delayNanos = updateAudioLatency();
             }
 
