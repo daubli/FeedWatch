@@ -14,13 +14,12 @@ def gitCommit() {
 }
 
 android {
-    compileSdk 33
-
-    viewBinding {
-        enabled = true
-    }
+    namespace "de.daubli.feedwatch"
+    compileSdk 36
 
     buildFeatures {
+        viewBinding true
+        buildConfig true
         // Oboe ships its native library as a prefab package
         prefab true
     }
@@ -36,9 +35,9 @@ android {
     defaultConfig {
         applicationId "de.daubli.feedwatch"
         minSdk 25
-        targetSdk 33
-        versionCode 4
-        versionName "1.2.1"
+        targetSdk 36
+        versionCode 5
+        versionName "1.2.2"
         buildConfigField "String", "GIT_COMMIT", "\"${gitCommit()}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -62,11 +61,11 @@ android {
 
     ndkVersion "27.3.13750724"
 
-    packagingOptions {
+    packaging {
         jniLibs {
-            // AGP 7 aligns uncompressed native libraries in the APK to 4 KB only, which devices with 16 KB pages
-            // reject. Compressed libraries are extracted on install, so only their LOAD segments need 16 KB.
-            useLegacyPackaging true
+            // Compressed libraries are extracted on install, so only their LOAD segments need 16 KB alignment,
+            // and the APK stays a third of the size
+            useLegacyPackaging = true
         }
     }
 
@@ -91,14 +90,15 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
+    implementation 'androidx.core:core:1.16.0'
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
     implementation 'com.google.android.material:material:1.3.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
     implementation 'com.google.oboe:oboe:1.9.3'
 
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.robolectric:robolectric:4.11.1'
+    testImplementation 'org.robolectric:robolectric:4.17'
     testImplementation 'org.mockito:mockito-core:5.7.0'
     testImplementation 'androidx.test:core:1.5.0'
 }

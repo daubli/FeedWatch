@@ -96,7 +96,9 @@ public class UsbDevicePermissionHandler {
             }
         };
 
-        activity.registerReceiver(receiver, new IntentFilter(ACTION_USB_PERMISSION));
+        // the broadcast comes from our own PendingIntent
+        ContextCompat.registerReceiver(activity, receiver, new IntentFilter(ACTION_USB_PERMISSION),
+                ContextCompat.RECEIVER_NOT_EXPORTED);
         usbManager.requestPermission(device, pendingIntent);
     }
 }

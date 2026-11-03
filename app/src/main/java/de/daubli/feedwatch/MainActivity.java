@@ -55,6 +55,7 @@ import de.daubli.feedwatch.sources.VideoSource;
 import de.daubli.feedwatch.usb.UsbDevicePermissionHandler;
 import de.daubli.feedwatch.uvc.UVCSource;
 import de.daubli.feedwatch.uvc.UVCSourceFinder;
+import de.daubli.feedwatch.view.SystemInsets;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -111,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        SystemInsets.padForSystemBars(findViewById(android.R.id.content));
 
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
