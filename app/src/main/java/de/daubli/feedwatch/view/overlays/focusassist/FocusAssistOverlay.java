@@ -44,8 +44,8 @@ public class FocusAssistOverlay extends Overlay {
     // in pixels of the video, wider than a sharp edge, the shaders unroll it
     private static final int RANGE_RADIUS = 6;
 
-    // crops the video a bit, so the border of the video is not detected as an edge
-    private static final float BORDER_TEXELS = 3.5f;
+    // in pixels of the screen, crops the video a bit, so the border of the video is not detected as an edge
+    private static final int BORDER_PIXELS = 4;
 
     // quad over the whole viewport: (left,top), (left,bottom), (right,top), (right,bottom)
     private static final float[] FULL_VERTICES = { -1f, 1f, -1f, -1f, 1f, 1f, 1f, -1f };
@@ -332,23 +332,28 @@ public class FocusAssistOverlay extends Overlay {
     @Override
     public void draw(int videoTextureId, int videoRectLeft, int videoRectTop, int videoRectWidth, int videoRectHeight,
             int surfaceWidth, int surfaceHeight) {
-        if (videoRectWidth <= 0 || videoRectHeight <= 0) {
+        // the measured rect, the video rect without its border. Measured and marked pixel for pixel, so the thin
+        // edges lie exactly on the picture.
+        int left = videoRectLeft + BORDER_PIXELS;
+        int top = videoRectTop + BORDER_PIXELS;
+        int width = videoRectWidth - 2 * BORDER_PIXELS;
+        int height = videoRectHeight - 2 * BORDER_PIXELS;
+        if (width <= 0 || height <= 0) {
             return;
         }
 
         initGL();
-        ensureFramebuffers(videoRectWidth, videoRectHeight);
+        ensureFramebuffers(width, height);
 
         // screen pixels per pixel of the video: a video shown larger is judged at its own size
         float pixelScale = frameWidth > 0 ? Math.max(1f, (float) videoRectWidth / frameWidth) : 1f;
 
         GLES20.glDisable(GLES20.GL_BLEND);
-        GLES20.glViewport(0, 0, videoRectWidth, videoRectHeight);
+        GLES20.glViewport(0, 0, width, height);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
 
-        // 1) across: the video rect of the surface-sized FBO texture into framebuffer 0
-        updateVideoTexCoords(texCoordBuffer, BORDER_TEXELS, videoRectLeft, videoRectTop, videoRectWidth,
-                videoRectHeight, surfaceWidth, surfaceHeight);
+        // 1) across: the measured rect of the surface-sized FBO texture into framebuffer 0
+        updateVideoTexCoords(texCoordBuffer, left, top, width, height, surfaceWidth, surfaceHeight);
         GLES20.glUseProgram(rangePrograms[0]);
         GLES20.glUniform1i(rangeTextures[0], 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[0]);
@@ -361,29 +366,30 @@ public class FocusAssistOverlay extends Overlay {
         GLES20.glUniform1i(rangeTextures[1], 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[1]);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[0]);
-        GLES20.glUniform2f(rangeSteps[1], 0f, pixelScale / videoRectHeight);
+        GLES20.glUniform2f(rangeSteps[1], 0f, pixelScale / height);
         drawQuad(rangePositions[1], rangeTexCoords[1], fullVertexBuffer, fullTexCoordBuffer);
 
-        // 3) edges of framebuffer 1, blended over the video rect on screen
+        // 3) edges of framebuffer 1, blended over the measured rect on screen
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
-        updateVideoVertices(videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight, surfaceWidth,
-                surfaceHeight);
 
         if (monoBackground) {
             // the gray video covers the colored one exactly, so it is not cropped
-            updateVideoTexCoords(monoTexCoordBuffer, 0f, videoRectLeft, videoRectTop, videoRectWidth,
-                    videoRectHeight, surfaceWidth, surfaceHeight);
+            updateVideoVertices(videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight, surfaceWidth,
+                    surfaceHeight);
+            updateVideoTexCoords(monoTexCoordBuffer, videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight,
+                    surfaceWidth, surfaceHeight);
             GLES20.glUseProgram(monoProgram);
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, videoTextureId);
             GLES20.glUniform1i(monoTexture, 0);
             drawQuad(monoPosition, monoTexCoord, vertexBuffer, monoTexCoordBuffer);
         }
 
+        updateVideoVertices(left, top, width, height, surfaceWidth, surfaceHeight);
         GLES20.glUseProgram(edgeProgram);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[1]);
         GLES20.glUniform1i(edgeTexture, 0);
-        GLES20.glUniform2f(edgeTexelSize, pixelScale / videoRectWidth, pixelScale / videoRectHeight);
+        GLES20.glUniform2f(edgeTexelSize, pixelScale / width, pixelScale / height);
         GLES20.glUniform1f(edgeThreshold, threshold);
         GLES20.glUniform1f(edgeMinContrast, MIN_CONTRAST);
         GLES20.glUniform1f(edgeMinAlpha, MIN_EDGE_ALPHA);
@@ -396,17 +402,15 @@ public class FocusAssistOverlay extends Overlay {
     }
 
     /**
-     * The part of the surface-sized FBO texture under the video rect, cropped by {@code border} texels on each side.
-     * The FBO texture is flipped compared to the video frame.
+     * The part of the surface-sized FBO texture under a rect of the surface. The FBO texture is flipped compared to
+     * the video frame.
      */
-    private void updateVideoTexCoords(FloatBuffer texCoords, float border, int videoRectLeft, int videoRectTop,
-            int videoRectWidth, int videoRectHeight, int surfaceWidth, int surfaceHeight) {
-        float du = border / (float) surfaceWidth;
-        float dv = border / (float) surfaceHeight;
-        float u0 = (float) videoRectLeft / (float) surfaceWidth + du;
-        float u1 = (float) (videoRectLeft + videoRectWidth) / (float) surfaceWidth - du;
-        float vTop = 1f - (float) videoRectTop / (float) surfaceHeight - dv;
-        float vBottom = 1f - (float) (videoRectTop + videoRectHeight) / (float) surfaceHeight + dv;
+    private void updateVideoTexCoords(FloatBuffer texCoords, int rectLeft, int rectTop, int rectWidth,
+            int rectHeight, int surfaceWidth, int surfaceHeight) {
+        float u0 = (float) rectLeft / (float) surfaceWidth;
+        float u1 = (float) (rectLeft + rectWidth) / (float) surfaceWidth;
+        float vTop = 1f - (float) rectTop / (float) surfaceHeight;
+        float vBottom = 1f - (float) (rectTop + rectHeight) / (float) surfaceHeight;
 
         // the framebuffer keeps the FBO's orientation, so its top row is at the top of the viewport
         dynTex[0] = u0;
@@ -423,14 +427,14 @@ public class FocusAssistOverlay extends Overlay {
     }
 
     /**
-     * NDC quad for the video rect (no heap alloc)
+     * NDC quad for a rect of the surface (no heap alloc)
      */
-    private void updateVideoVertices(int videoRectLeft, int videoRectTop, int videoRectWidth, int videoRectHeight,
-            int surfaceWidth, int surfaceHeight) {
-        float left = 2f * videoRectLeft / surfaceWidth - 1f;
-        float right = 2f * (videoRectLeft + videoRectWidth) / surfaceWidth - 1f;
-        float top = 1f - 2f * videoRectTop / surfaceHeight;
-        float bottom = 1f - 2f * (videoRectTop + videoRectHeight) / surfaceHeight;
+    private void updateVideoVertices(int rectLeft, int rectTop, int rectWidth, int rectHeight, int surfaceWidth,
+            int surfaceHeight) {
+        float left = 2f * rectLeft / surfaceWidth - 1f;
+        float right = 2f * (rectLeft + rectWidth) / surfaceWidth - 1f;
+        float top = 1f - 2f * rectTop / surfaceHeight;
+        float bottom = 1f - 2f * (rectTop + rectHeight) / surfaceHeight;
 
         dynVertices[0] = left;
         dynVertices[1] = top;
