@@ -166,9 +166,9 @@ public class FocusAssistOverlay extends Overlay {
                         "uniform vec2 uStep;" +
                         "varying vec2 vTexCoord;" +
 
+                        // Rec. 709 luma: the mean of R, G and B made edges between green and blue look weak
                         "float gray(vec2 uv) {" +
-                        "  vec3 c = texture2D(uTexture, uv).rgb;" +
-                        "  return (c.r + c.g + c.b) * 0.3333333;" +
+                        "  return dot(texture2D(uTexture, uv).rgb, vec3(0.2126, 0.7152, 0.0722));" +
                         "}" +
 
                         "void main() {" +
