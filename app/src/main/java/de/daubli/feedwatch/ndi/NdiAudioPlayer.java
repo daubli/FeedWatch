@@ -3,8 +3,8 @@ package de.daubli.feedwatch.ndi;
 /**
  * Plays the audio of an NDI source on the device's audio output. It has a receiver of its own for the audio, which
  * fills a jitter buffer: audio held back by Wi-Fi for a moment only changes how full the buffer is. The buffer grows
- * each time it runs empty anyway, further for a source without video. Playback is resampled slightly to hold the buffer level, which absorbs the clock
- * difference between sender and device.
+ * each time it runs empty anyway, further for a source without video. Playback is resampled slightly to follow the
+ * measured clock difference between sender and device and to hold the buffer level.
  */
 public class NdiAudioPlayer implements AutoCloseable {
 
