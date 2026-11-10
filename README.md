@@ -14,23 +14,6 @@ monitoring tools. The latest APK is on the [releases page](https://github.com/da
 > license itself. Anyone who wanted to use this functionality would need to obtain the appropriate license
 > independently.
 
-## Changes in this fork
-
-This fork replaces the UVC capture layer and adds audio and a resolution choice for capture cards:
-
-- **UVC through libuvc** instead of a bulk-only USB reader. Cards that stream over isochronous endpoints now work at
-  all (the original code stopped with `No BULK IN endpoint found`), and the frame size is taken from the formats the
-  device reports instead of being assumed.
-- **RGBX frames from libuvc**: no JPEG decoding in Java any more, and the pixels are copied once into a small pool of
-  recycled buffers instead of allocating a new 3.7 MB buffer per frame. 1280×720 went from about 24 to about 30 fps
-  on an SM-T800.
-- **UVC audio**: the card's USB audio input is recorded, played through the speaker and shown on the stereo level
-  meter. The audio button mutes playback and keeps the meter live.
-- **Resolution picker**: the resolution chip in the top bar opens 480 p / 576 p / 720 p / 1080 p for UVC sources.
-- **Build**: AGP 8.1.4, Gradle 8.7, JDK 17 and platform 34.
-- **Troubleshooting**: a capture card that was killed while streaming needs its power cycled, see
-  [BUILDING.md](BUILDING.md).
-
 ## Features
 
 ### Sources
@@ -63,7 +46,7 @@ Tap a tool button to turn the tool on or off, long-press it for its settings.
 - **NDI® tally**: red for program, green for preview, in the top bar and as a border around the picture
 - **Audio**: NDI® audio in sync with the picture, with a stereo level meter and a jitter buffer of 50 to 200 ms. Muted,
   the picture is shown with the lowest latency. For UVC sources the card's USB audio input is played and metered as
-  well; there the audio button mutes playback but keeps the meter live.
+  well. This needs the microphone permission, which the app asks for together with the camera permission.
 - **Resolution** (UVC only): tap the resolution chip in the top bar to pick 480 p, 576 p, 720 p or 1080 p. The choice
   is stored and the stream is reopened with it; if the card does not offer that height, the closest one is used.
 - **Stream statistics**: frame rates, dropped and skipped frames, bandwidth and audio buffer, updated twice a second.
@@ -75,51 +58,47 @@ Tap a tool button to turn the tool on or off, long-press it for its settings.
 Before building, we need to make sure that the following components are installed:
 
 - Java Development Kit (JDK) 17
-- Android SDK Platform 33
+- Android SDK Platform 36, NDK 27.3.13750724 and CMake 3.22.1
 - NDI SDK for Android
 
 ### 1. Java 17
 
-Build the project with JDK 17, like the release workflow does. Gradle 7.4 and the Android Gradle Plugin 7.2.2 run on
-JDK 11 to 17; newer JDKs fail while dexing. If your default JDK is a different one, point Gradle to JDK 17:
+Build the project with JDK 17, like the release workflow does. If your default JDK is a different one, point Gradle to
+JDK 17:
 
-`./gradlew -Dorg.gradle.java.home=<JDK_17_HOME> assemble`
+`./gradlew -Dorg.gradle.java.home=<JDK_17_HOME> assembleDebug`
 
 The JDK only runs the build. The app itself is compiled for Java 8 and runs on Android 7.1 (API level 25) and newer.
 
 ### 2. Android SDK
 
-Install Android SDK Platform 34. Instruction can be
-found [here](https://developer.android.com/about/versions/14/setup-sdk)
+Install Android SDK Platform 36 and, from the SDK Manager's SDK Tools, NDK 27.3.13750724 and CMake 3.22.1. Instructions
+can be found [here](https://developer.android.com/about/versions/16/setup-sdk).
 
-Platform 34 is needed for the UVC library; the app still runs on the older devices it always supported.
+### 3. NDI SDK for Android
 
-### 3. Download and Install the NDI SDK
+`libndi.so` and the NDI headers are not part of this repository. Download the NDI SDK for Android from the
+[official site](https://ndi.video/for-developers/ndi-sdk/download/) and run its installer, which asks you to accept the
+NDI SDK license. Then copy the headers and the libraries of the Android ABIs into the project:
 
-Download the NDI SDK for Android from the [official site](https://ndi.video/for-developers/ndi-sdk/download/)
-
-Follow the installer instructions for your platform and note the installation directory.
-
-### 3.1 Copy NDI Header Files
-
-After installation, copy the NDI header files into the project’s C++ include directory:
-
-`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/include/* \ <PROJECT_ROOT>/FeedWatch/app/src/main/cpp/include/`
-
-### 3.2 Copy NDI Library Binaries
-
-Next, copy the NDI library binaries into the project’s jniLibs directory:
-
-`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/lib/* <PROJECT_ROOT>/FeedWatch/app/src/main/jniLibs/`
-
-Ensure that the copied libraries match the ABIs you intend to build for (e.g. arm64-v8a, armeabi-v7a).
+```sh
+cp "<NDI_SDK_INSTALL_DIR>/NDI SDK for Android/include/"* app/src/main/cpp/include/
+cp -R "<NDI_SDK_INSTALL_DIR>/NDI SDK for Android/lib/"* app/src/main/jniLibs/
+```
 
 ### 4. Build the Project
 
 `./gradlew assembleDebug`
 
-The APK is written to `app/build/outputs/apk/debug/`. See [BUILDING.md](BUILDING.md) for the UVC capture details and
-for the troubleshooting notes (a capture card that was killed mid-stream needs its power cycled).
+The APK is written to `app/build/outputs/apk/debug/`.
+
+## Troubleshooting
+
+**A UVC card shows no picture and logcat says `failed start_streaming (-5)`.** The card got stuck, usually because an
+app was killed while it was streaming. Unplug the card and plug it in again; it needs its power cycled.
+
+**A UVC card does not open at all.** Another app that opens USB cameras when they are attached can hold the card. Close
+it or keep it from opening the card.
 
 ## State of this project
 
