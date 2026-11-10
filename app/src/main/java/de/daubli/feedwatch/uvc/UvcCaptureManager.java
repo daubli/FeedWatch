@@ -20,6 +20,8 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -45,6 +47,14 @@ public class UvcCaptureManager {
     private static final int MAX_WIDTH = 1920;
     private static final int MAX_HEIGHT = 1080;
 
+    /**
+     * Opens and closes run one after another on this thread, for all managers. A stream that is opened again, e.g.
+     * with another resolution, waits until the previous one released the card, and the main thread never waits for
+     * the card.
+     */
+    private static final ExecutorService DEVICE_THREAD =
+            Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "UVC-Device"));
+
     private final UVCSource uvcSource;
     private final Context context;
     private final int preferredHeight;
@@ -58,6 +68,9 @@ public class UvcCaptureManager {
     private ImageReader previewSink;
 
     private volatile boolean capturing = false;
+
+    // set by stop, an open that has not begun yet is skipped
+    private volatile boolean stopRequested = false;
     private FrameCallback callback;
 
     private final CountDownLatch deviceLatch = new CountDownLatch(1);
@@ -78,8 +91,27 @@ public class UvcCaptureManager {
         this.preferredHeight = preferredHeight;
     }
 
+    /**
+     * Opens the card and starts the stream in the background. Frames arrive on libuvc's thread.
+     */
     public void start(FrameCallback callback) {
         this.callback = callback;
+        DEVICE_THREAD.execute(this::open);
+    }
+
+    /**
+     * Stops the stream and releases the card in the background, after an open still in progress.
+     */
+    public void stop() {
+        stopRequested = true;
+        capturing = false;
+        DEVICE_THREAD.execute(this::release);
+    }
+
+    private void open() {
+        if (stopRequested) {
+            return;
+        }
         final UsbDevice device = uvcSource.getUsbDevice();
 
         cameraThread = new HandlerThread("UVC-Camera");
@@ -129,13 +161,13 @@ public class UvcCaptureManager {
         Exception error = openError.get();
         if (error != null) {
             Log.e(TAG, "Could not open the UVC device", error);
-            stop();
+            release();
             return;
         }
 
         if (ctrlBlock == null) {
             Log.e(TAG, "USB device opened without a control block");
-            stop();
+            release();
             return;
         }
 
@@ -157,7 +189,7 @@ public class UvcCaptureManager {
         error = openError.get();
         if (error != null) {
             Log.e(TAG, "Could not start the UVC stream", error);
-            stop();
+            release();
         }
     }
 
@@ -289,7 +321,7 @@ public class UvcCaptureManager {
         }
     }
 
-    public void stop() {
+    private void release() {
         capturing = false;
 
         final UVCCamera current = camera;

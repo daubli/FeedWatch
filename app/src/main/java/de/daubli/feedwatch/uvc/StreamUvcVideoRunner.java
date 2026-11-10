@@ -152,6 +152,10 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
     }
 
     private void onFrame(ByteBuffer frame, int width, int height) {
+        // the card is closed in the background after stopStream
+        if (!running) {
+            return;
+        }
         usbFrames.incrementAndGet();
         usbBytes.addAndGet(frame.remaining());
 
