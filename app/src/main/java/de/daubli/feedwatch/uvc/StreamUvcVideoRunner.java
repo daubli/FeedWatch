@@ -76,12 +76,15 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
         final int height;
 
+        final String format;
+
         final FramePool pool;
 
-        Frame(ByteBuffer rgba, int width, int height, FramePool pool) {
+        Frame(ByteBuffer rgba, int width, int height, String format, FramePool pool) {
             this.rgba = rgba;
             this.width = width;
             this.height = height;
+            this.format = format;
             this.pool = pool;
         }
     }
@@ -151,7 +154,7 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
         mainHandler.post(renderRunnable);
     }
 
-    private void onFrame(ByteBuffer frame, int width, int height) {
+    private void onFrame(ByteBuffer frame, int width, int height, String format) {
         // the card is closed in the background after stopStream
         if (!running) {
             return;
@@ -182,7 +185,7 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
         target.rewind();
         updateCopyTime((SystemClock.elapsedRealtimeNanos() - copyStart) / 1e6f);
 
-        Frame previous = latestFrame.getAndSet(new Frame(target, width, height, pool));
+        Frame previous = latestFrame.getAndSet(new Frame(target, width, height, format, pool));
         if (previous != null) {
             previous.pool.release(previous.rgba);
             droppedFrames.incrementAndGet();
@@ -205,7 +208,7 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
                 openGLVideoView.updateFrame(f.rgba, f.width, f.height, FourCCType.RGBA,
                         () -> f.pool.release(f.rgba));
                 shownFrames++;
-                activity.onVideoFormat(f.width, f.height, measureFrameRate(), "MJPEG");
+                activity.onVideoFormat(f.width, f.height, measureFrameRate(), f.format);
             }
 
             openGLVideoView.postOnAnimation(this);

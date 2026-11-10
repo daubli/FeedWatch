@@ -81,8 +81,9 @@ public class UvcCaptureManager {
          * @param frame  packed RGBX pixels, only valid during the call
          * @param width  frame width
          * @param height frame height
+         * @param format what the card sends, MJPEG or YUYV, before libuvc converts it
          */
-        void onFrame(ByteBuffer frame, int width, int height);
+        void onFrame(ByteBuffer frame, int width, int height, String format);
     }
 
     public UvcCaptureManager(UVCSource source, Context context, int preferredHeight) {
@@ -237,6 +238,8 @@ public class UvcCaptureManager {
 
         final int width = mode.width;
         final int height = mode.height;
+        // UVCAndroid streams uncompressed frames as YUYV
+        final String format = mode.type == UVCCamera.UVC_VS_FRAME_MJPEG ? "MJPEG" : "YUYV";
 
         opened.setFrameCallback(new IFrameCallback() {
             @Override
@@ -244,7 +247,7 @@ public class UvcCaptureManager {
                 if (!capturing || callback == null || frame == null || frame.remaining() <= 0) {
                     return;
                 }
-                callback.onFrame(frame, width, height);
+                callback.onFrame(frame, width, height, format);
             }
         }, UVCCamera.PIXEL_FORMAT_RGBX);
 
