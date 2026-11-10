@@ -108,10 +108,14 @@ public class MainActivity extends AppCompatActivity {
     @Nullable
     private ValueAnimator autoStartProgress;
 
+    // one instance, so a request waiting for the runtime permission dialog can continue
+    private UsbDevicePermissionHandler usbPermissionHandler;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        usbPermissionHandler = new UsbDevicePermissionHandler(this);
         SystemInsets.padForSystemBars(findViewById(android.R.id.content));
 
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
@@ -173,10 +177,7 @@ public class MainActivity extends AppCompatActivity {
                 + ", vendorId=" + device.getVendorId()
                 + ", productId=" + device.getProductId());
 
-        UsbDevicePermissionHandler permissionHandler =
-                new UsbDevicePermissionHandler(this);
-
-        permissionHandler.requestPermission(device, new UsbDevicePermissionHandler.Callback() {
+        usbPermissionHandler.requestPermission(device, new UsbDevicePermissionHandler.Callback() {
             @Override
             public void onPermissionGranted(UsbDevice grantedDevice) {
                 // Add it to your source list, or directly open StreamVideoActivity.
@@ -548,8 +549,7 @@ public class MainActivity extends AppCompatActivity {
 
         selectVideoSource(chosen);
 
-        UsbDevicePermissionHandler permissionHandler = new UsbDevicePermissionHandler(this);
-        permissionHandler.requestPermission(((UVCSource) chosen).getUsbDevice(),
+        usbPermissionHandler.requestPermission(((UVCSource) chosen).getUsbDevice(),
                 new UsbDevicePermissionHandler.Callback() {
 
                     @Override
@@ -563,6 +563,13 @@ public class MainActivity extends AppCompatActivity {
                         Snackbar.make(sourceListView, R.string.usb_permission_denied, Snackbar.LENGTH_LONG).show();
                     }
                 });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+            @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        usbPermissionHandler.onRequestPermissionsResult(requestCode);
     }
 
     public void beginStreaming() {

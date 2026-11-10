@@ -1,8 +1,6 @@
 package de.daubli.feedwatch;
 
-import android.Manifest;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
@@ -19,10 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.ToIntFunction;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
 import de.daubli.feedwatch.ndi.NdiDiscoveryManager;
@@ -54,8 +49,6 @@ public class StreamVideoActivity extends AppCompatActivity {
     private static final int ZEBRA_THRESHOLD_MIN = 50;
 
     private static final int ZEBRA_THRESHOLD_MAX = 100;
-
-    private static final int REQUEST_RECORD_AUDIO = 201;
 
     private StreamVideoActivityBinding viewBinding;
 
@@ -112,7 +105,6 @@ public class StreamVideoActivity extends AppCompatActivity {
         initMenu();
         initHud();
         setFullScreen();
-        requestAudioPermissionIfNeeded();
         if (viewerMode) {
             hideMonitoringUi();
         } else {
@@ -759,32 +751,6 @@ public class StreamVideoActivity extends AppCompatActivity {
         if (receiving && !audioOnlyShown && lastVideoWidth == 0 && !viewerMode) {
             audioOnlyShown = true;
             viewBinding.resolutionChip.setText(R.string.hud_audio_only);
-        }
-    }
-
-    private void requestAudioPermissionIfNeeded() {
-        if (!(videoSource instanceof UVCSource)) {
-            return;
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                == PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO},
-                REQUEST_RECORD_AUDIO);
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-            @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_RECORD_AUDIO
-                && grantResults.length > 0
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED
-                && runner != null
-                && new SettingsStore().isAudioEnabled()) {
-            // the runner started before the permission was granted
-            runner.setAudioEnabled(true);
         }
     }
 
