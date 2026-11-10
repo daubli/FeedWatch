@@ -1,13 +1,9 @@
 package de.daubli.feedwatch.uvc;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -16,14 +12,16 @@ import de.daubli.feedwatch.R;
 import de.daubli.feedwatch.StreamVideoActivity;
 import de.daubli.feedwatch.StreamVideoRunner;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
-import de.daubli.feedwatch.decoder.MJpegBitmapBuilder;
 import de.daubli.feedwatch.ndi.FourCCType;
+import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.stats.RateMeter;
 import de.daubli.feedwatch.stats.StreamStats;
 import de.daubli.feedwatch.view.base.OpenGLVideoView;
 import de.daubli.feedwatch.view.overlays.framehelper.FramingHelperOverlayView;
 
 public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
+
+    private static final int FRAME_BUFFERS = 4;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -33,17 +31,17 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     private final UvcCaptureManager captureManager;
 
-    private final ExecutorService decodeExecutor = Executors.newSingleThreadExecutor();
-
-    private final AtomicBoolean decodeInProgress = new AtomicBoolean(false);
+    private final UvcAudioPlayer audioPlayer;
 
     private final AtomicReference<Frame> latestFrame = new AtomicReference<>();
-
-    private final AtomicReference<byte[]> latestCompressedFrame = new AtomicReference<>();
 
     private final FramingHelperOverlayView framingHelperOverlayView;
 
     private volatile boolean running = true;
+
+    private volatile FramePool framePool;
+
+    private volatile boolean audioEnabled;
 
     private long frameRateWindowStart;
 
@@ -51,18 +49,18 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     private float measuredFrameRate;
 
-    // statistics: the counters are written by the USB and decode threads, the rest only on the main thread
+    // statistics: the counters are written by the USB and render threads, the rest only on the main thread
     private final long startedAtMillis = SystemClock.elapsedRealtime();
 
     private final AtomicLong usbFrames = new AtomicLong();
 
     private final AtomicLong usbBytes = new AtomicLong();
 
-    // frames that were not decoded or not shown because a newer one replaced them
+    // frames that were not shown because a newer one replaced them
     private final AtomicLong droppedFrames = new AtomicLong();
 
-    // average decode time, -1 before the first frame
-    private volatile float decodeMillis = -1;
+    // time spent copying the frame into one of our buffers, -1 before the first frame
+    private volatile float copyMillis = -1;
 
     private long shownFrames;
 
@@ -80,63 +78,114 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
         final int height;
 
-        Frame(ByteBuffer rgba, int width, int height) {
+        final FramePool pool;
+
+        Frame(ByteBuffer rgba, int width, int height, FramePool pool) {
             this.rgba = rgba;
             this.width = width;
             this.height = height;
+            this.pool = pool;
+        }
+    }
+
+    /**
+     * A few direct buffers that are recycled once the GL thread has uploaded them. Without this
+     * every frame allocated a 3.7 MB direct buffer and copied the pixels twice.
+     */
+    private static final class FramePool {
+
+        private final ByteBuffer[] buffers = new ByteBuffer[FRAME_BUFFERS];
+
+        private final boolean[] inUse = new boolean[FRAME_BUFFERS];
+
+        private final int size;
+
+        FramePool(int size) {
+            this.size = size;
+            for (int i = 0; i < FRAME_BUFFERS; i++) {
+                buffers[i] = ByteBuffer.allocateDirect(size);
+            }
+        }
+
+        int getSize() {
+            return size;
+        }
+
+        synchronized ByteBuffer acquire() {
+            for (int i = 0; i < FRAME_BUFFERS; i++) {
+                if (!inUse[i]) {
+                    inUse[i] = true;
+                    return buffers[i];
+                }
+            }
+            return null;
+        }
+
+        synchronized void release(ByteBuffer buffer) {
+            for (int i = 0; i < FRAME_BUFFERS; i++) {
+                if (buffers[i] == buffer) {
+                    inUse[i] = false;
+                    return;
+                }
+            }
         }
     }
 
     public StreamUvcVideoRunner(UVCSource uvcSource, StreamVideoActivityBinding binding, StreamVideoActivity activity) {
-        this.captureManager = new UvcCaptureManager(uvcSource, activity);
+        this.captureManager = new UvcCaptureManager(uvcSource, activity,
+                new SettingsStore().getUvcResolutionHeight());
         this.openGLVideoView = binding.openGLVideoView;
         this.framingHelperOverlayView = binding.framingHelperOverlayView;
         this.activity = activity;
+        this.audioPlayer = new UvcAudioPlayer(activity,
+                (left, right) -> mainHandler.post(() -> activity.onAudioLevels(left, right, true)));
         openGLVideoView.setOnVideoRectChangedListener(framingHelperOverlayView::setFramingRect);
     }
 
     @Override
     public void run() {
-        captureManager.start(data -> {
-            usbFrames.incrementAndGet();
-            usbBytes.addAndGet(data.length);
-            if (!decodeInProgress.compareAndSet(false, true)) {
-                droppedFrames.incrementAndGet();
-                latestCompressedFrame.set(data.clone());
-                return;
-            }
+        audioEnabled = new SettingsStore().isAudioEnabled();
+        if (audioEnabled) {
+            audioPlayer.start();
+        }
 
-            // Copy MJPEG bytes because capture buffer might be reused by the producer
-            byte[] mjpeg = data.clone();
-
-            decodeExecutor.execute(() -> {
-                try {
-                    long decodeStart = SystemClock.elapsedRealtimeNanos();
-                    // Decode MJPEG -> Bitmap
-                    Bitmap bmp = MJpegBitmapBuilder.builder().withRawData(ByteBuffer.wrap(mjpeg)).build();
-
-                    if (bmp == null) {
-                        return;
-                    }
-
-                    int w = bmp.getWidth();
-                    int h = bmp.getHeight();
-
-                    ByteBuffer rgba = bitmapToRgbaBuffer(bmp);
-                    bmp.recycle();
-
-                    if (latestFrame.getAndSet(new Frame(rgba, w, h)) != null) {
-                        droppedFrames.incrementAndGet();
-                    }
-                    updateDecodeTime((SystemClock.elapsedRealtimeNanos() - decodeStart) / 1e6f);
-
-                } finally {
-                    decodeInProgress.set(false);
-                }
-            });
-        });
+        captureManager.start(this::onFrame);
 
         mainHandler.post(renderRunnable);
+    }
+
+    private void onFrame(ByteBuffer frame, int width, int height) {
+        usbFrames.incrementAndGet();
+        usbBytes.addAndGet(frame.remaining());
+
+        int size = width * height * 4;
+        FramePool pool = framePool;
+        if (pool == null || pool.getSize() != size) {
+            pool = new FramePool(size);
+            framePool = pool;
+        }
+
+        ByteBuffer target = pool.acquire();
+        if (target == null) {
+            // all buffers are still with the renderer
+            droppedFrames.incrementAndGet();
+            return;
+        }
+
+        long copyStart = SystemClock.elapsedRealtimeNanos();
+        target.clear();
+        int length = Math.min(frame.remaining(), target.capacity());
+        ByteBuffer source = frame.duplicate();
+        source.limit(source.position() + length);
+        target.put(source);
+        target.rewind();
+        updateCopyTime((SystemClock.elapsedRealtimeNanos() - copyStart) / 1e6f);
+
+        Frame previous = latestFrame.getAndSet(new Frame(target, width, height, pool));
+        if (previous != null) {
+            previous.pool.release(previous.rgba);
+            droppedFrames.incrementAndGet();
+        }
     }
 
     private final Runnable renderRunnable = new Runnable() {
@@ -151,8 +200,9 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
             if (f != null) {
                 openGLVideoView.setVisibility(View.VISIBLE);
 
-                // Push to GL thread via OpenGLVideoView queueEvent()
-                openGLVideoView.updateFrame(f.rgba, f.width, f.height, FourCCType.RGBA);
+                // The pool buffer is free again once the GL thread uploaded it
+                openGLVideoView.updateFrame(f.rgba, f.width, f.height, FourCCType.RGBA,
+                        () -> f.pool.release(f.rgba));
                 shownFrames++;
                 activity.onVideoFormat(f.width, f.height, measureFrameRate(), "MJPEG");
             }
@@ -161,10 +211,20 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
         }
     };
 
-    // only the decode thread writes it
-    private void updateDecodeTime(float millis) {
-        float average = decodeMillis;
-        decodeMillis = average < 0 ? millis : average + (millis - average) / 16;
+    // only the capture thread writes it
+    private void updateCopyTime(float millis) {
+        float average = copyMillis;
+        copyMillis = average < 0 ? millis : average + (millis - average) / 16;
+    }
+
+    @Override
+    public void setAudioEnabled(boolean enabled) {
+        audioEnabled = enabled;
+        if (enabled) {
+            audioPlayer.start();
+        } else {
+            audioPlayer.stop();
+        }
     }
 
     @Override
@@ -176,7 +236,7 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
         long frames = usbFrames.get();
         stats.add(R.string.stats_frames, StreamStats.count(frames));
         stats.add(R.string.stats_dropped, StreamStats.countOf(droppedFrames.get(), frames));
-        stats.add(R.string.stats_decode_time, StreamStats.millis(decodeMillis));
+        stats.add(R.string.stats_decode_time, StreamStats.millis(copyMillis));
     }
 
     // UVC frames carry no frame rate, so count rendered frames per second
@@ -196,20 +256,6 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
         return measuredFrameRate;
     }
 
-    private static ByteBuffer bitmapToRgbaBuffer(Bitmap bmp) {
-        Bitmap argb = bmp.getConfig() == Bitmap.Config.ARGB_8888 ? bmp : bmp.copy(Bitmap.Config.ARGB_8888, false);
-
-        ByteBuffer buf = ByteBuffer.allocateDirect(argb.getByteCount());
-        buf.rewind();
-        argb.copyPixelsToBuffer(buf);
-        buf.rewind();
-
-        if (argb != bmp) {
-            argb.recycle();
-        }
-        return buf;
-    }
-
     @Override
     public void shutdown() {
         stopStream();
@@ -219,9 +265,14 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
     @Override
     public void stopStream() {
         running = false;
+        audioPlayer.stop();
         captureManager.stop();
 
         mainHandler.removeCallbacks(renderRunnable);
-        decodeExecutor.shutdownNow();
+
+        Frame f = latestFrame.getAndSet(null);
+        if (f != null) {
+            f.pool.release(f.rgba);
+        }
     }
 }

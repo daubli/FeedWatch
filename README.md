@@ -14,6 +14,23 @@ monitoring tools. The latest APK is on the [releases page](https://github.com/da
 > license itself. Anyone who wanted to use this functionality would need to obtain the appropriate license
 > independently.
 
+## Changes in this fork
+
+This fork replaces the UVC capture layer and adds audio and a resolution choice for capture cards:
+
+- **UVC through libuvc** instead of a bulk-only USB reader. Cards that stream over isochronous endpoints now work at
+  all (the original code stopped with `No BULK IN endpoint found`), and the frame size is taken from the formats the
+  device reports instead of being assumed.
+- **RGBX frames from libuvc**: no JPEG decoding in Java any more, and the pixels are copied once into a small pool of
+  recycled buffers instead of allocating a new 3.7 MB buffer per frame. 1280×720 went from about 24 to about 30 fps
+  on an SM-T800.
+- **UVC audio**: the card's USB audio input is recorded, played through the speaker and shown on the stereo level
+  meter. The audio button mutes playback and keeps the meter live.
+- **Resolution picker**: the resolution chip in the top bar opens 480 p / 576 p / 720 p / 1080 p for UVC sources.
+- **Build**: AGP 8.1.4, Gradle 8.7, JDK 17 and platform 34.
+- **Troubleshooting**: a capture card that was killed while streaming needs its power cycled, see
+  [BUILDING.md](BUILDING.md).
+
 ## Features
 
 ### Sources
@@ -21,8 +38,10 @@ monitoring tools. The latest APK is on the [releases page](https://github.com/da
 - **NDI® High Bandwidth** sources from the network. NDI® can be network-intensive, so a **USB-C Ethernet adapter** is
   strongly recommended.
 - **Additional NDI® senders** outside mDNS discovery can be added by their IP address in the Settings.
-- **UVC capture cards**, such as USB HDMI grabbers, show up as sources as soon as they are plugged in (tested with a
-  low-cost UGREEN Video Capture Card).
+- **UVC capture cards**, such as USB HDMI grabbers, show up as sources as soon as they are plugged in. Capture goes
+  through [libuvc](https://github.com/libuvc/libuvc), so cards that stream over isochronous endpoints work as well as
+  bulk-only ones, and the frame size is chosen from the formats the card actually reports. MJPEG is preferred.
+  Tested with a low-cost UGREEN Video Capture Card and a MACROSILICON MS2109 based HDMI grabber.
 - **Default source**: long-press a source to open it automatically when the app starts, after a short countdown.
 - **Low Bandwidth Mode** uses the NDI® proxy stream instead of full resolution, for phones on Wi-Fi.
 
@@ -43,9 +62,12 @@ Tap a tool button to turn the tool on or off, long-press it for its settings.
 
 - **NDI® tally**: red for program, green for preview, in the top bar and as a border around the picture
 - **Audio**: NDI® audio in sync with the picture, with a stereo level meter and a jitter buffer of 50 to 200 ms. Muted,
-  the picture is shown with the lowest latency.
+  the picture is shown with the lowest latency. For UVC sources the card's USB audio input is played and metered as
+  well; there the audio button mutes playback but keeps the meter live.
+- **Resolution** (UVC only): tap the resolution chip in the top bar to pick 480 p, 576 p, 720 p or 1080 p. The choice
+  is stored and the stream is reopened with it; if the card does not offer that height, the closest one is used.
 - **Stream statistics**: frame rates, dropped and skipped frames, bandwidth and audio buffer, updated twice a second.
-  For UVC sources also the data rate and the time to decode a frame.
+  For UVC sources also the data rate and the time to copy a frame.
 - **Viewer mode**: only the picture, with the close and audio buttons
 
 ## Build Requirements
@@ -67,8 +89,10 @@ The JDK only runs the build. The app itself is compiled for Java 8 and runs on A
 
 ### 2. Android SDK
 
-Install Android SDK Platform 33. Instruction can be
-found [here](https://developer.android.com/about/versions/13/setup-sdk)
+Install Android SDK Platform 34. Instruction can be
+found [here](https://developer.android.com/about/versions/14/setup-sdk)
+
+Platform 34 is needed for the UVC library; the app still runs on the older devices it always supported.
 
 ### 3. Download and Install the NDI SDK
 
@@ -92,7 +116,10 @@ Ensure that the copied libraries match the ABIs you intend to build for (e.g. ar
 
 ### 4. Build the Project
 
-`./gradlew assemble`
+`./gradlew assembleDebug`
+
+The APK is written to `app/build/outputs/apk/debug/`. See [BUILDING.md](BUILDING.md) for the UVC capture details and
+for the troubleshooting notes (a capture card that was killed mid-stream needs its power cycled).
 
 ## State of this project
 
