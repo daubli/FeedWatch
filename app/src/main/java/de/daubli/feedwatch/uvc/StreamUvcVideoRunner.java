@@ -41,8 +41,6 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     private volatile FramePool framePool;
 
-    private volatile boolean audioEnabled;
-
     private long frameRateWindowStart;
 
     private int frameRateWindowCount;
@@ -144,8 +142,7 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     @Override
     public void run() {
-        audioEnabled = new SettingsStore().isAudioEnabled();
-        if (audioEnabled) {
+        if (new SettingsStore().isAudioEnabled()) {
             audioPlayer.start();
         }
 
@@ -219,7 +216,6 @@ public class StreamUvcVideoRunner extends Thread implements StreamVideoRunner {
 
     @Override
     public void setAudioEnabled(boolean enabled) {
-        audioEnabled = enabled;
         if (enabled) {
             audioPlayer.start();
         } else {

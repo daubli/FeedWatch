@@ -44,8 +44,6 @@ public class UvcAudioPlayer {
 
     private volatile boolean running;
 
-    private volatile boolean playbackEnabled = true;
-
     private AudioRecord record;
 
     private AudioTrack track;
@@ -73,11 +71,6 @@ public class UvcAudioPlayer {
         thread = new Thread(this::loop, "UVC-Audio");
         thread.start();
         return true;
-    }
-
-    /** Mutes playback but keeps reading, so the meter stays live. */
-    public void setPlaybackEnabled(boolean enabled) {
-        playbackEnabled = enabled;
     }
 
     public void stop() {
@@ -109,7 +102,7 @@ public class UvcAudioPlayer {
 
                 reportLevels(buffer, read);
 
-                if (playbackEnabled && track != null) {
+                if (track != null) {
                     track.write(buffer, 0, read);
                 }
             }
