@@ -41,12 +41,6 @@ public class UvcCaptureManager {
     private static final long OPEN_TIMEOUT_MS = 15_000;
     private static final long CLOSE_TIMEOUT_MS = 3_000;
 
-    /** A field monitor does not need more than this, and it keeps the old tablet responsive. */
-    private static final int PREFERRED_WIDTH = 1280;
-    private static final int PREFERRED_HEIGHT = 720;
-    private static final int MAX_WIDTH = 1920;
-    private static final int MAX_HEIGHT = 1080;
-
     /**
      * Opens and closes run one after another on this thread, for all managers. A stream that is opened again, e.g.
      * with another resolution, waits until the previous one released the card, and the main thread never waits for
