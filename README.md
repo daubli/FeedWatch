@@ -47,7 +47,7 @@ Tap a tool button to turn the tool on or off, long-press it for its settings.
 - **Audio**: NDI® audio in sync with the picture, with a stereo level meter and a jitter buffer of 50 to 200 ms. Muted,
   the picture is shown with the lowest latency. For UVC sources the card's USB audio input is played and metered as
   well. This needs the microphone permission, which the app asks for together with the camera permission.
-- **Resolution** (UVC only): tap the resolution chip in the top bar to pick 480 p, 576 p, 720 p or 1080 p. The choice
+- **Resolution** (UVC only): tap the resolution chip in the top bar to pick 480p, 576p, 720p or 1080p. The choice
   is stored and the stream is reopened with it; if the card does not offer that height, the closest one is used.
 - **Stream statistics**: frame rates, dropped and skipped frames, bandwidth and audio buffer, updated twice a second.
   For UVC sources also the data rate and the time to copy a frame.

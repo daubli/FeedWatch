@@ -71,7 +71,7 @@
     <string name="peaking_background_mono">Mono</string>
     <string name="resolution_settings_title">Resolution</string>
     <string name="resolution_settings_choice">Frame size</string>
-    <string name="resolution_choice">%1$d p</string>
+    <string name="resolution_choice">%1$dp</string>
     <string name="zebra_settings_title">Zebra</string>
     <string name="zebra_settings_threshold">Threshold</string>
     <string name="percent_value">%1$d%%</string>
