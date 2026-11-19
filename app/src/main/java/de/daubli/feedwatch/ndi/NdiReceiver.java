@@ -2,10 +2,11 @@ package de.daubli.feedwatch.ndi;
 
 public class NdiReceiver extends NdiFrameCleaner {
 
-    // NDIlib_recv_bandwidth_e
-    private static final int BANDWIDTH_LOWEST = 0;
+    // NDIlib_recv_bandwidth_e, video and metadata only: the audio comes from a receiver of its own (NdiAudioPlayer),
+    // so with audio off no audio is received at all
+    private static final int BANDWIDTH_LOWEST = 1;
 
-    private static final int BANDWIDTH_HIGHEST = 100;
+    private static final int BANDWIDTH_HIGHEST = 101;
 
     final long instancePointer;
 
