@@ -47,6 +47,7 @@ public class SettingsStoreTest {
         assertFalse(store.isFocusAssistEnabled());
         assertEquals(FocusPeakingColor.RED, store.getFocusPeakingColor());
         assertEquals(50, store.getFocusPeakingSensitivity());
+        assertFalse(store.isFocusPeakingMono());
         assertFalse(store.isZebraEnabled());
         assertEquals(95, store.getZebraThreshold());
 
@@ -119,6 +120,7 @@ public class SettingsStoreTest {
     public void switchesAreStored() {
         store.setFramingHelperOverlayEnabled(true);
         store.setFocusAssistEnabled(true);
+        store.setFocusPeakingMono(true);
         store.setZebraEnabled(true);
         store.setWaveformEnabled(true);
         store.setVectorscopeEnabled(true);
@@ -130,6 +132,7 @@ public class SettingsStoreTest {
         SettingsStore reloaded = new SettingsStore();
         assertTrue(reloaded.isFramingHelperOverlayEnabled());
         assertTrue(reloaded.isFocusAssistEnabled());
+        assertTrue(reloaded.isFocusPeakingMono());
         assertTrue(reloaded.isZebraEnabled());
         assertTrue(reloaded.isWaveformEnabled());
         assertTrue(reloaded.isVectorscopeEnabled());
@@ -145,7 +148,7 @@ public class SettingsStoreTest {
         store.setFrameLines(FrameLines.SCOPE);
         store.setSafeArea(SafeArea.TITLE);
         store.setGuideColor(GuideColor.YELLOW);
-        store.setFocusPeakingColor(FocusPeakingColor.BLUE);
+        store.setFocusPeakingColor(FocusPeakingColor.GREEN);
         store.setFocusPeakingSensitivity(80);
         store.setZebraThreshold(70);
         store.setWaveformMode(WaveformMode.RGB);
@@ -157,7 +160,7 @@ public class SettingsStoreTest {
         assertEquals(FrameLines.SCOPE, reloaded.getFrameLines());
         assertEquals(SafeArea.TITLE, reloaded.getSafeArea());
         assertEquals(GuideColor.YELLOW, reloaded.getGuideColor());
-        assertEquals(FocusPeakingColor.BLUE, reloaded.getFocusPeakingColor());
+        assertEquals(FocusPeakingColor.GREEN, reloaded.getFocusPeakingColor());
         assertEquals(80, reloaded.getFocusPeakingSensitivity());
         assertEquals(70, reloaded.getZebraThreshold());
         assertEquals(WaveformMode.RGB, reloaded.getWaveformMode());
@@ -185,7 +188,7 @@ public class SettingsStoreTest {
         preferences().edit()
                 .putString("de.daubli.feedwatch.view.overlays.framing-helper.grid", "GOLDEN_RATIO")
                 .putString("de.daubli.feedwatch.view.overlays.framing-helper.frame-lines", "CINEMA")
-                .putString("de.daubli.feedwatch.view.overlays.focusassist.color", "GREEN")
+                .putString("de.daubli.feedwatch.view.overlays.focusassist.color", "MAGENTA")
                 .putString("de.daubli.feedwatch.view.overlays.waveform.mode", "PARADE")
                 .putString("de.daubli.feedwatch.view.overlays.vectorscope.zoom", "QUADRUPLE")
                 .commit();

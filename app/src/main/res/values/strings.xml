@@ -51,6 +51,9 @@
     <string name="hud_tally_preview">PVW</string>
     <string name="hud_tally_idle">TALLY</string>
     <string name="hud_waiting">NO SIGNAL</string>
+    <string name="hud_audio_only">AUDIO ONLY</string>
+    <string name="audio_playback_channel">Audio playback</string>
+    <string name="audio_playback_title">Playing audio</string>
     <string name="hud_stats">Stream statistics</string>
     <string name="tool_grid">GRID</string>
     <string name="tool_zebra">ZEBRA</string>
@@ -63,6 +66,12 @@
     <string name="peaking_settings_title">Focus peaking</string>
     <string name="peaking_settings_color">Color</string>
     <string name="peaking_settings_sensitivity">Sensitivity</string>
+    <string name="peaking_settings_background">Background</string>
+    <string name="peaking_background_color">Color</string>
+    <string name="peaking_background_mono">Mono</string>
+    <string name="resolution_settings_title">Resolution</string>
+    <string name="resolution_settings_choice">Frame size</string>
+    <string name="resolution_choice">%1$dp</string>
     <string name="zebra_settings_title">Zebra</string>
     <string name="zebra_settings_threshold">Threshold</string>
     <string name="percent_value">%1$d%%</string>
@@ -111,6 +120,7 @@
     <string name="color_white">White</string>
     <string name="color_red">Red</string>
     <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
     <string name="color_blue">Blue</string>
     <string name="audio_right">R</string>
 </resources>

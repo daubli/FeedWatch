@@ -26,6 +26,13 @@ public class NdiVideoFrame implements AutoCloseable {
         return getYRes(instancePointer);
     }
 
+    /**
+     * Bytes from the start of one row to the next, can be more than the row itself needs.
+     */
+    public int getLineStrideInBytes() {
+        return getLineStride(instancePointer);
+    }
+
     public ByteBuffer getData() {
         return getData(instancePointer);
     }
@@ -85,6 +92,8 @@ public class NdiVideoFrame implements AutoCloseable {
     private static native int getXRes(long pointer);
 
     private static native int getYRes(long pointer);
+
+    private static native int getLineStride(long pointer);
 
     private static native int getFourCCType(long pointer);
 

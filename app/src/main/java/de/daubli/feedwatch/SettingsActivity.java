@@ -21,6 +21,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputLayout;
 import de.daubli.feedwatch.settings.SettingsStore;
+import de.daubli.feedwatch.view.SystemInsets;
 
 public class SettingsActivity extends AppCompatActivity {
 
@@ -55,6 +56,7 @@ public class SettingsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
+        SystemInsets.padForSystemBars(findViewById(android.R.id.content));
 
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());

@@ -14,10 +14,21 @@ import de.daubli.feedwatch.view.overlays.Overlay;
  * the local contrast, the brightest minus the darkest luma within {@link #RANGE_RADIUS} pixels. What is left depends
  * on how narrow the edge is, and that is what the threshold compares.
  * <p>
- * Two passes, across and then down, write the blurred luma and the local maximum and minimum into framebuffers the
- * size of the video rect: 13 + 13 + 10 texture reads a pixel instead of the 9 * 25 it took with the blur inside the
- * Sobel loop, which was too much for phone GPUs. Distances are counted in pixels of the video, so a stream shown
- * larger than its size, like the low bandwidth proxy, is judged by its own sharpness.
+ * The video is measured at its own size, not as shown: on a small screen details would be lost before the
+ * measurement, and a stream shown larger than its size, like the low bandwidth proxy, is judged by its own sharpness.
+ * The frame texture is shrunk to at most 2560 pixels wide, 4K to half its size, which keeps it affordable for phone
+ * GPUs.
+ * <p>
+ * Two passes, across and then down, write the blurred luma and the local maximum and minimum into framebuffers of
+ * the measured size: 13 + 13 + 14 texture reads a pixel instead of the 9 * 25 it took with the blur inside the Sobel
+ * loop, which was too much for phone GPUs. A third pass writes the edges into a mask of the same size, the last one
+ * draws the mask over the video rect.
+ * <p>
+ * The blur spreads the slope of an edge over several pixels, all of them as sharp. Only the steepest of them, along
+ * the direction of the gradient, is marked, so the edges are drawn as thin lines and cover little of the picture.
+ * <p>
+ * With a mono background the video rect is painted in its luma before the edges are drawn, so they stand out on
+ * pictures in any color.
  */
 public class FocusAssistOverlay extends Overlay {
 
@@ -29,14 +40,25 @@ public class FocusAssistOverlay extends Overlay {
 
     private static final float MOST_SENSITIVE_THRESHOLD = 0.85f;
 
+    // opacity of an edge right at the threshold, more above it
+    private static final float MIN_EDGE_ALPHA = 0.8f;
+
     // below this contrast the luma is too flat to tell an edge from noise
     private static final float MIN_CONTRAST = 0.08f;
 
     // in pixels of the video, wider than a sharp edge, the shaders unroll it
     private static final int RANGE_RADIUS = 6;
 
-    // crops the video a bit, so the border of the video is not detected as an edge
-    private static final float BORDER_TEXELS = 3.5f;
+    // a shrunk mask takes the strongest of up to this many texels across and down a screen pixel
+    private static final int MAX_FOOTPRINT = 4;
+
+    // exact texture coordinates for frames and masks up to 4K, the samples between texels need them
+    private static final String PRECISION =
+            "#ifdef GL_FRAGMENT_PRECISION_HIGH\n" +
+                    "precision highp float;\n" +
+                    "#else\n" +
+                    "precision mediump float;\n" +
+                    "#endif\n";
 
     // quad over the whole viewport: (left,top), (left,bottom), (right,top), (right,bottom)
     private static final float[] FULL_VERTICES = { -1f, 1f, -1f, -1f, 1f, 1f, 1f, -1f };
@@ -49,7 +71,7 @@ public class FocusAssistOverlay extends Overlay {
 
     private final FloatBuffer vertexBuffer;
 
-    private final FloatBuffer texCoordBuffer;
+    private final FloatBuffer monoTexCoordBuffer;
 
     private final float[] dynTex = new float[8];
 
@@ -82,12 +104,34 @@ public class FocusAssistOverlay extends Overlay {
 
     private int edgeMinContrast = -1;
 
-    private int edgeColorLocation = -1;
+    private int edgeMinAlpha = -1;
 
-    // [0] across, [1] across and down
-    private final int[] framebuffers = new int[2];
+    private int maskProgram = 0;
 
-    private final int[] framebufferTextures = new int[2];
+    private int maskPosition = -1;
+
+    private int maskTexCoord = -1;
+
+    private int maskTexture = -1;
+
+    private int maskTexelCount = -1;
+
+    private int maskFootprint = -1;
+
+    private int maskColor = -1;
+
+    private int monoProgram = 0;
+
+    private int monoPosition = -1;
+
+    private int monoTexCoord = -1;
+
+    private int monoTexture = -1;
+
+    // [0] across, [1] across and down, [2] the edge mask
+    private final int[] framebuffers = new int[3];
+
+    private final int[] framebufferTextures = new int[3];
 
     private int framebufferWidth = 0;
 
@@ -98,7 +142,11 @@ public class FocusAssistOverlay extends Overlay {
 
     private final float[] edgeColor = {1.0f, 0.0f, 0.0f};
 
-    // size of the video frame, 0 while unknown
+    private boolean monoBackground = false;
+
+    // the drawn frame in RGB at its own size, 0 while there is none
+    private int frameTexture = 0;
+
     private int frameWidth = 0;
 
     private int frameHeight = 0;
@@ -107,7 +155,7 @@ public class FocusAssistOverlay extends Overlay {
         fullVertexBuffer = floatBuffer(FULL_VERTICES);
         fullTexCoordBuffer = floatBuffer(FULL_TEX_COORDS);
         vertexBuffer = floatBuffer(new float[8]);
-        texCoordBuffer = floatBuffer(new float[8]);
+        monoTexCoordBuffer = floatBuffer(new float[8]);
     }
 
     /**
@@ -127,7 +175,13 @@ public class FocusAssistOverlay extends Overlay {
     }
 
     @Override
-    public void setFrameSize(int width, int height) {
+    public boolean needsFrameTexture() {
+        return true;
+    }
+
+    @Override
+    public void setFrameTexture(int textureId, int width, int height) {
+        frameTexture = textureId;
         frameWidth = width;
         frameHeight = height;
     }
@@ -139,6 +193,13 @@ public class FocusAssistOverlay extends Overlay {
         edgeColor[0] = Color.red(color) / 255f;
         edgeColor[1] = Color.green(color) / 255f;
         edgeColor[2] = Color.blue(color) / 255f;
+    }
+
+    /**
+     * Shows the video in gray behind the edges, or in color. Call it on the GL thread.
+     */
+    public void setMonoBackground(boolean mono) {
+        monoBackground = mono;
     }
 
     private void initGL() {
@@ -157,18 +218,18 @@ public class FocusAssistOverlay extends Overlay {
                         "  vTexCoord = aTexCoord;" +
                         "}";
 
-        // Along uStep, one pixel of the video: the 5 tap binomial blur of the luma into red, the largest and the
-        // smallest luma within RANGE_RADIUS pixels into green and blue. Across it reads the video, down the result
+        // Along uStep, one measured pixel: the 5 tap binomial blur of the luma into red, the largest and the
+        // smallest luma within RANGE_RADIUS pixels into green and blue. Across it reads the frame, down the result
         // of across.
         final String rangeAcrossShader =
-                "precision mediump float;" +
+                PRECISION +
                         "uniform sampler2D uTexture;" +
                         "uniform vec2 uStep;" +
                         "varying vec2 vTexCoord;" +
 
+                        // Rec. 709 luma: the mean of R, G and B made edges between green and blue look weak
                         "float gray(vec2 uv) {" +
-                        "  vec3 c = texture2D(uTexture, uv).rgb;" +
-                        "  return (c.r + c.g + c.b) * 0.3333333;" +
+                        "  return dot(texture2D(uTexture, uv).rgb, vec3(0.2126, 0.7152, 0.0722));" +
                         "}" +
 
                         "void main() {" +
@@ -185,7 +246,7 @@ public class FocusAssistOverlay extends Overlay {
                         "}";
 
         final String rangeDownShader =
-                "precision mediump float;" +
+                PRECISION +
                         "uniform sampler2D uTexture;" +
                         "uniform vec2 uStep;" +
                         "varying vec2 vTexCoord;" +
@@ -205,18 +266,25 @@ public class FocusAssistOverlay extends Overlay {
                         "  gl_FragColor = vec4((c.r * 6.0 + (a1.r + b1.r) * 4.0 + a2.r + b2.r) * 0.0625, hi, lo, 1.0);" +
                         "}";
 
-        // Sobel over the blurred luma, divided by the local contrast: how narrow the edge is
+        // Sobel over the blurred luma, divided by the local contrast: how narrow the edge is. Marked only where the
+        // slope along the gradient is steeper than one pixel further and at least as steep as one pixel back, so of
+        // two equally steep pixels one is marked. The samples along the gradient fall between texels and are
+        // filtered linearly. Writes the opacity of the edge into all channels of the mask.
         final String edgeShader =
-                "precision mediump float;" +
+                PRECISION +
                         "uniform sampler2D uTexture;" +
                         "uniform vec2 uTexelSize;" +
                         "uniform float uThreshold;" +
                         "uniform float uMinContrast;" +
-                        "uniform vec3 uEdgeColor;" +
+                        "uniform float uMinAlpha;" +
                         "varying vec2 vTexCoord;" +
 
                         "float g(float x, float y) {" +
                         "  return texture2D(uTexture, vTexCoord + vec2(x, y) * uTexelSize).r;" +
+                        "}" +
+
+                        "float at(vec2 offset) {" +
+                        "  return texture2D(uTexture, vTexCoord + offset).r;" +
                         "}" +
 
                         "void main() {" +
@@ -228,10 +296,59 @@ public class FocusAssistOverlay extends Overlay {
 
                         "  vec4 range = texture2D(uTexture, vTexCoord);" +
                         "  float contrast = range.g - range.b;" +
-                        "  float sharpness = length(vec2(gx, gy)) / max(contrast, uMinContrast);" +
-                        "  float alpha = (contrast >= uMinContrast && sharpness >= uThreshold)" +
-                        "      ? clamp(0.6 + (sharpness - uThreshold) / uThreshold, 0.0, 1.0) : 0.0;" +
+                        "  float strength = length(vec2(gx, gy));" +
+                        "  float sharpness = strength / max(contrast, uMinContrast);" +
+
+                        // one measured pixel along the gradient, its sign does not matter
+                        "  vec2 n = vec2(gx, gy) / max(strength, 0.0001) * uTexelSize;" +
+                        "  float slope = abs(at(n) - at(-n));" +
+                        "  float slopeAhead = abs(at(2.0 * n) - range.r);" +
+                        "  float slopeBehind = abs(range.r - at(-2.0 * n));" +
+                        "  bool steepest = slope > slopeAhead && slope >= slopeBehind;" +
+
+                        "  float alpha = (steepest && contrast >= uMinContrast && sharpness >= uThreshold)" +
+                        "      ? clamp(uMinAlpha + (sharpness - uThreshold) / uThreshold, 0.0, 1.0) : 0.0;" +
+                        "  gl_FragColor = vec4(alpha);" +
+                        "}";
+
+        // The mask in the edge color over the video rect. Shown larger it is filtered linearly. Shown smaller a
+        // screen pixel covers several texels and takes the strongest of them, so thin edges do not break up.
+        final String maskShader =
+                PRECISION +
+                        "uniform sampler2D uTexture;" +
+                        "uniform vec2 uTexelCount;" +
+                        "uniform vec2 uFootprint;" +
+                        "uniform vec3 uEdgeColor;" +
+                        "varying vec2 vTexCoord;" +
+
+                        "void main() {" +
+                        "  float alpha = 0.0;" +
+                        "  if (uFootprint.x <= 1.0 && uFootprint.y <= 1.0) {" +
+                        "    alpha = texture2D(uTexture, vTexCoord).a;" +
+                        "  } else {" +
+                        "    vec2 first = floor(vTexCoord * uTexelCount - 0.5 * uFootprint);" +
+                        "    vec2 last = floor(vTexCoord * uTexelCount + 0.5 * uFootprint);" +
+                        "    for (int y = 0; y < " + MAX_FOOTPRINT + "; y++) {" +
+                        "      for (int x = 0; x < " + MAX_FOOTPRINT + "; x++) {" +
+                        "        vec2 texel = first + vec2(float(x), float(y));" +
+                        "        if (texel.x <= last.x && texel.y <= last.y) {" +
+                        "          alpha = max(alpha, texture2D(uTexture, (texel + 0.5) / uTexelCount).a);" +
+                        "        }" +
+                        "      }" +
+                        "    }" +
+                        "  }" +
                         "  gl_FragColor = vec4(uEdgeColor, alpha);" +
+                        "}";
+
+        // the video in its Rec. 709 luma, as background for the edges
+        final String monoShader =
+                "precision mediump float;" +
+                        "uniform sampler2D uTexture;" +
+                        "varying vec2 vTexCoord;" +
+
+                        "void main() {" +
+                        "  float y = dot(texture2D(uTexture, vTexCoord).rgb, vec3(0.2126, 0.7152, 0.0722));" +
+                        "  gl_FragColor = vec4(y, y, y, 1.0);" +
                         "}";
         //@formatter:on
 
@@ -251,7 +368,20 @@ public class FocusAssistOverlay extends Overlay {
         edgeTexelSize = GLES20.glGetUniformLocation(edgeProgram, "uTexelSize");
         edgeThreshold = GLES20.glGetUniformLocation(edgeProgram, "uThreshold");
         edgeMinContrast = GLES20.glGetUniformLocation(edgeProgram, "uMinContrast");
-        edgeColorLocation = GLES20.glGetUniformLocation(edgeProgram, "uEdgeColor");
+        edgeMinAlpha = GLES20.glGetUniformLocation(edgeProgram, "uMinAlpha");
+
+        maskProgram = createProgram(vertexShader, maskShader);
+        maskPosition = GLES20.glGetAttribLocation(maskProgram, "aPosition");
+        maskTexCoord = GLES20.glGetAttribLocation(maskProgram, "aTexCoord");
+        maskTexture = GLES20.glGetUniformLocation(maskProgram, "uTexture");
+        maskTexelCount = GLES20.glGetUniformLocation(maskProgram, "uTexelCount");
+        maskFootprint = GLES20.glGetUniformLocation(maskProgram, "uFootprint");
+        maskColor = GLES20.glGetUniformLocation(maskProgram, "uEdgeColor");
+
+        monoProgram = createProgram(vertexShader, monoShader);
+        monoPosition = GLES20.glGetAttribLocation(monoProgram, "aPosition");
+        monoTexCoord = GLES20.glGetAttribLocation(monoProgram, "aTexCoord");
+        monoTexture = GLES20.glGetUniformLocation(monoProgram, "uTexture");
 
         // the old framebuffers went with the old context
         framebufferWidth = 0;
@@ -263,70 +393,86 @@ public class FocusAssistOverlay extends Overlay {
     @Override
     public void draw(int videoTextureId, int videoRectLeft, int videoRectTop, int videoRectWidth, int videoRectHeight,
             int surfaceWidth, int surfaceHeight) {
-        if (videoRectWidth <= 0 || videoRectHeight <= 0) {
+        if (frameTexture == 0 || videoRectWidth <= 0 || videoRectHeight <= 0) {
             return;
         }
 
-        initGL();
-        ensureFramebuffers(videoRectWidth, videoRectHeight);
+        // measured pixel for pixel of the frame texture
+        int width = frameWidth;
+        int height = frameHeight;
 
-        // screen pixels per pixel of the video: a video shown larger is judged at its own size
-        float pixelScale = frameWidth > 0 ? Math.max(1f, (float) videoRectWidth / frameWidth) : 1f;
+        initGL();
+        ensureFramebuffers(width, height);
 
         GLES20.glDisable(GLES20.GL_BLEND);
-        GLES20.glViewport(0, 0, videoRectWidth, videoRectHeight);
+        GLES20.glViewport(0, 0, width, height);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
 
-        // 1) across: the video rect of the surface-sized FBO texture into framebuffer 0
-        updateVideoTexCoords(videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight, surfaceWidth,
-                surfaceHeight);
+        // 1) across: the frame into framebuffer 0. Both have their top row at the top of the viewport.
         GLES20.glUseProgram(rangePrograms[0]);
         GLES20.glUniform1i(rangeTextures[0], 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[0]);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, videoTextureId);
-        GLES20.glUniform2f(rangeSteps[0], pixelScale / surfaceWidth, 0f);
-        drawQuad(rangePositions[0], rangeTexCoords[0], fullVertexBuffer, texCoordBuffer);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, frameTexture);
+        GLES20.glUniform2f(rangeSteps[0], 1f / width, 0f);
+        drawQuad(rangePositions[0], rangeTexCoords[0], fullVertexBuffer, fullTexCoordBuffer);
 
         // 2) down: framebuffer 0 into framebuffer 1
         GLES20.glUseProgram(rangePrograms[1]);
         GLES20.glUniform1i(rangeTextures[1], 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[1]);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[0]);
-        GLES20.glUniform2f(rangeSteps[1], 0f, pixelScale / videoRectHeight);
+        GLES20.glUniform2f(rangeSteps[1], 0f, 1f / height);
         drawQuad(rangePositions[1], rangeTexCoords[1], fullVertexBuffer, fullTexCoordBuffer);
 
-        // 3) edges of framebuffer 1, blended over the video rect on screen
+        // 3) edges of framebuffer 1 into the mask
+        GLES20.glUseProgram(edgeProgram);
+        GLES20.glUniform1i(edgeTexture, 0);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffers[2]);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[1]);
+        GLES20.glUniform2f(edgeTexelSize, 1f / width, 1f / height);
+        GLES20.glUniform1f(edgeThreshold, threshold);
+        GLES20.glUniform1f(edgeMinContrast, MIN_CONTRAST);
+        GLES20.glUniform1f(edgeMinAlpha, MIN_EDGE_ALPHA);
+        drawQuad(edgePosition, edgeTexCoord, fullVertexBuffer, fullTexCoordBuffer);
+
+        // 4) on screen: the gray background if wanted, then the mask over the video rect
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
         updateVideoVertices(videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight, surfaceWidth,
                 surfaceHeight);
 
-        GLES20.glUseProgram(edgeProgram);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[1]);
-        GLES20.glUniform1i(edgeTexture, 0);
-        GLES20.glUniform2f(edgeTexelSize, pixelScale / videoRectWidth, pixelScale / videoRectHeight);
-        GLES20.glUniform1f(edgeThreshold, threshold);
-        GLES20.glUniform1f(edgeMinContrast, MIN_CONTRAST);
-        GLES20.glUniform3f(edgeColorLocation, edgeColor[0], edgeColor[1], edgeColor[2]);
+        if (monoBackground) {
+            updateVideoTexCoords(monoTexCoordBuffer, videoRectLeft, videoRectTop, videoRectWidth, videoRectHeight,
+                    surfaceWidth, surfaceHeight);
+            GLES20.glUseProgram(monoProgram);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, videoTextureId);
+            GLES20.glUniform1i(monoTexture, 0);
+            drawQuad(monoPosition, monoTexCoord, vertexBuffer, monoTexCoordBuffer);
+        }
+
+        GLES20.glUseProgram(maskProgram);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[2]);
+        GLES20.glUniform1i(maskTexture, 0);
+        GLES20.glUniform2f(maskTexelCount, width, height);
+        GLES20.glUniform2f(maskFootprint, (float) width / videoRectWidth, (float) height / videoRectHeight);
+        GLES20.glUniform3f(maskColor, edgeColor[0], edgeColor[1], edgeColor[2]);
 
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-        drawQuad(edgePosition, edgeTexCoord, vertexBuffer, fullTexCoordBuffer);
+        drawQuad(maskPosition, maskTexCoord, vertexBuffer, fullTexCoordBuffer);
         GLES20.glDisable(GLES20.GL_BLEND);
     }
 
     /**
-     * The part of the surface-sized FBO texture under the video rect, cropped by {@link #BORDER_TEXELS}. The FBO
-     * texture is flipped compared to the video frame.
+     * The part of the surface-sized FBO texture under a rect of the surface. The FBO texture is flipped compared to
+     * the video frame.
      */
-    private void updateVideoTexCoords(int videoRectLeft, int videoRectTop, int videoRectWidth, int videoRectHeight,
-            int surfaceWidth, int surfaceHeight) {
-        float du = BORDER_TEXELS / (float) surfaceWidth;
-        float dv = BORDER_TEXELS / (float) surfaceHeight;
-        float u0 = (float) videoRectLeft / (float) surfaceWidth + du;
-        float u1 = (float) (videoRectLeft + videoRectWidth) / (float) surfaceWidth - du;
-        float vTop = 1f - (float) videoRectTop / (float) surfaceHeight - dv;
-        float vBottom = 1f - (float) (videoRectTop + videoRectHeight) / (float) surfaceHeight + dv;
+    private void updateVideoTexCoords(FloatBuffer texCoords, int rectLeft, int rectTop, int rectWidth,
+            int rectHeight, int surfaceWidth, int surfaceHeight) {
+        float u0 = (float) rectLeft / (float) surfaceWidth;
+        float u1 = (float) (rectLeft + rectWidth) / (float) surfaceWidth;
+        float vTop = 1f - (float) rectTop / (float) surfaceHeight;
+        float vBottom = 1f - (float) (rectTop + rectHeight) / (float) surfaceHeight;
 
         // the framebuffer keeps the FBO's orientation, so its top row is at the top of the viewport
         dynTex[0] = u0;
@@ -338,19 +484,19 @@ public class FocusAssistOverlay extends Overlay {
         dynTex[6] = u1;
         dynTex[7] = vBottom;
 
-        texCoordBuffer.clear();
-        texCoordBuffer.put(dynTex).position(0);
+        texCoords.clear();
+        texCoords.put(dynTex).position(0);
     }
 
     /**
-     * NDC quad for the video rect (no heap alloc)
+     * NDC quad for a rect of the surface (no heap alloc)
      */
-    private void updateVideoVertices(int videoRectLeft, int videoRectTop, int videoRectWidth, int videoRectHeight,
-            int surfaceWidth, int surfaceHeight) {
-        float left = 2f * videoRectLeft / surfaceWidth - 1f;
-        float right = 2f * (videoRectLeft + videoRectWidth) / surfaceWidth - 1f;
-        float top = 1f - 2f * videoRectTop / surfaceHeight;
-        float bottom = 1f - 2f * (videoRectTop + videoRectHeight) / surfaceHeight;
+    private void updateVideoVertices(int rectLeft, int rectTop, int rectWidth, int rectHeight, int surfaceWidth,
+            int surfaceHeight) {
+        float left = 2f * rectLeft / surfaceWidth - 1f;
+        float right = 2f * (rectLeft + rectWidth) / surfaceWidth - 1f;
+        float top = 1f - 2f * rectTop / surfaceHeight;
+        float bottom = 1f - 2f * (rectTop + rectHeight) / surfaceHeight;
 
         dynVertices[0] = left;
         dynVertices[1] = top;
@@ -382,19 +528,21 @@ public class FocusAssistOverlay extends Overlay {
             return;
         }
         if (framebufferWidth > 0) {
-            GLES20.glDeleteFramebuffers(2, framebuffers, 0);
-            GLES20.glDeleteTextures(2, framebufferTextures, 0);
+            GLES20.glDeleteFramebuffers(3, framebuffers, 0);
+            GLES20.glDeleteTextures(3, framebufferTextures, 0);
         }
 
-        GLES20.glGenTextures(2, framebufferTextures, 0);
-        GLES20.glGenFramebuffers(2, framebuffers, 0);
-        for (int i = 0; i < 2; i++) {
+        GLES20.glGenTextures(3, framebufferTextures, 0);
+        GLES20.glGenFramebuffers(3, framebuffers, 0);
+        for (int i = 0; i < 3; i++) {
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, framebufferTextures[i]);
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0, GLES20.GL_RGBA,
                     GLES20.GL_UNSIGNED_BYTE, null);
-            // one texel per pixel, the filter only matters at the clamped edges
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+            // one texel per pixel, but the edges sample framebuffer 1 between texels along the gradient, and the
+            // mask is scaled to the video rect
+            int filter = i == 0 ? GLES20.GL_NEAREST : GLES20.GL_LINEAR;
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, filter);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, filter);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
 

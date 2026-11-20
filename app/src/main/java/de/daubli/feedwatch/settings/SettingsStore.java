@@ -47,6 +47,8 @@ public class SettingsStore {
     private static final String FOCUS_PEAKING_SENSITIVITY_KEY =
             "de.daubli.feedwatch.view.overlays.focusassist.sensitivity";
 
+    private static final String FOCUS_PEAKING_MONO_KEY = "de.daubli.feedwatch.view.overlays.focusassist.mono";
+
     private static final String ZEBRA_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.zebra.enabled";
 
     private static final String ZEBRA_THRESHOLD_KEY = "de.daubli.feedwatch.view.overlays.zebra.threshold";
@@ -80,6 +82,8 @@ public class SettingsStore {
     private static final String AUDIO_ENABLED_KEY = "de.daubli.feedwatch.ndi.audio.enabled";
 
     private static final String VIEWER_MODE_ENABLED_KEY = "de.daubli.feedwatch.view.viewermode.enabled";
+
+    private static final String UVC_RESOLUTION_HEIGHT_KEY = "de.daubli.feedwatch.uvc.resolution.height";
 
     private static final String DEFAULT_SOURCE_KEY = "de.daubli.feedwatch.sources.default.key";
 
@@ -244,6 +248,19 @@ public class SettingsStore {
     public void setFocusPeakingSensitivity(int percent) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt(FOCUS_PEAKING_SENSITIVITY_KEY, percent);
+        editor.apply();
+    }
+
+    /**
+     * Whether focus peaking shows the video in gray behind the edges, off by default.
+     */
+    public boolean isFocusPeakingMono() {
+        return sharedPreferences.getBoolean(FOCUS_PEAKING_MONO_KEY, false);
+    }
+
+    public void setFocusPeakingMono(boolean mono) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(FOCUS_PEAKING_MONO_KEY, mono);
         editor.apply();
     }
 
@@ -430,6 +447,20 @@ public class SettingsStore {
     public void setViewerModeEnabled(boolean enabled) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(VIEWER_MODE_ENABLED_KEY, enabled);
+        editor.apply();
+    }
+
+    /**
+     * Preferred frame height of a UVC source, 720 by default. The capture falls back to the closest
+     * height the device actually offers.
+     */
+    public int getUvcResolutionHeight() {
+        return sharedPreferences.getInt(UVC_RESOLUTION_HEIGHT_KEY, 720);
+    }
+
+    public void setUvcResolutionHeight(int height) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(UVC_RESOLUTION_HEIGHT_KEY, height);
         editor.apply();
     }
 

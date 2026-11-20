@@ -328,7 +328,7 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             long delayNanos = 0;
             if (audioEnabled) {
                 audioPlayer.takePeaks(audioPeaks);
-                activity.onAudioLevels(audioPeaks[0], audioPeaks[1]);
+                activity.onAudioLevels(audioPeaks[0], audioPeaks[1], audioPlayer.isReceiving());
                 delayNanos = updateAudioLatency();
             }
 
@@ -337,6 +337,10 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 if (firstFramePending) {
                     videoView.setVisibility(View.VISIBLE);
                     firstFramePending = false;
+                    // only a few frames can wait for their audio
+                    if (audioPlayer != null) {
+                        audioPlayer.limitBufferForVideo();
+                    }
                 }
 
                 try {
@@ -350,10 +354,12 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                     // read everything up front, the frame may be recycled as soon as it is handed to GL
                     int width = frame.getXResolution();
                     int height = frame.getYResolution();
+                    int lineStride = frame.getLineStrideInBytes();
                     FourCCType fourCCType = frame.getFourCCType();
                     float frameRate = frameRate(frame);
 
-                    videoView.updateFrame(frame.getData(), width, height, fourCCType, () -> recycleFrame(frame));
+                    videoView.updateFrame(frame.getData(), width, height, lineStride, fourCCType,
+                            () -> recycleFrame(frame));
                     shownFrames++;
                     activity.onVideoFormat(width, height, frameRate, fourCCType.name());
 

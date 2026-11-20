@@ -11,18 +11,21 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 
 namespace {
 
 const char *TAG = "NdiAudioPlayer";
 
 // Jitter buffer: playback starts once this much audio is buffered, so packets held back by Wi-Fi for a moment do not
-// empty it. Each time it runs empty anyway the target grows, up to a limit: the video waits for its audio, and the
-// frames pending for it are limited.
+// empty it. Each time it runs empty anyway the target grows, up to a limit. With video the limit is low: the video
+// waits for its audio, and the frames pending for it are limited. A source without video may buffer more: a Mac
+// sending over Wi-Fi holds packets back for up to ~300 ms.
 const int32_t BUFFER_INITIAL_MS = 100;
 const int32_t BUFFER_STEP_MS = 50;
+const int32_t BUFFER_MAX_MS = 500;
 // 400 ms bridges the gaps of a busy 100 Mbit link (a TV's Ethernet port at 70 Mbit/s of video: 120 to 350 ms)
-const int32_t BUFFER_MAX_MS = 400;
+const int32_t BUFFER_MAX_WITH_VIDEO_MS = 400;
 
 // On a steady connection the target shrinks again: after a window without running empty, if the deepest dip of the
 // level in it plus a margin also fits into the smaller target. Wi-Fi gaps come in rarer, larger ones too: if the
@@ -39,13 +42,20 @@ const int32_t BUFFER_SETTLED_MS = 15;
 // the picture
 const int32_t BUFFER_TRIM_MS = 100;
 
-// The playback rate is trimmed by at most this much to hold the buffer at its target, which absorbs the clock
-// difference between sender and device. 0.1 % is inaudible, clocks differ by ~0.01 %.
-const double MAX_RATE_CORRECTION = 0.001;
+// The playback rate is trimmed by at most this much to follow the clock difference between sender and device and to
+// hold the buffer at its target. Crystals differ by ~0.01 %, but a TV device that derives its audio clock from a
+// 59.94 Hz HDMI mode can be 0.1 % off. 0.5 % (9 cents) is inaudible when it changes as slowly as here.
+const double MAX_RATE_CORRECTION = 0.005;
 
-// rate correction per second of deviation from the target, before the limit: 50 ms off uses the full correction,
-// so a target 50 ms lower is reached in about a minute
+// rate correction per second of deviation from the target, on top of the measured clock difference: a target 50 ms
+// lower is reached in about a minute
 const double RATE_CORRECTION_PER_SECOND = 0.02;
+
+// The clock difference is measured once per second of the device's clock. The measurement is used once it spans
+// this long and its standard error is below this; until then the one measured last time for the source, if any.
+// What is left of the error only moves the level ~15 ms off the target, and it keeps shrinking.
+const double CLOCK_MIN_SPAN_SECONDS = 30;
+const double CLOCK_MAX_ERROR = 0.0003;
 
 // smoothing of the buffer level for the rate correction, in output callbacks (10 ms each): audio arrives in bursts
 const double LEVEL_AVERAGE_CALLBACKS = 100;
@@ -127,9 +137,73 @@ private:
 };
 
 /**
+ * Measures the sender's clock against the device's: a line fitted through the frames received over the time played
+ * on the device's clock has the sender's sample rate, as the device sees it, as its slope. Unlike the buffer level
+ * it is not upset by the buffer running empty or being trimmed, and network jitter averages out.
+ */
+class ClockEstimator {
+public:
+    void reset() {
+        count = 0;
+        meanSeconds = meanFrames = 0;
+        varianceSeconds = varianceFrames = covariance = 0;
+    }
+
+    void add(double seconds, double frames) {
+        if (count == 0) {
+            firstSeconds = seconds;
+        }
+        lastSeconds = seconds;
+        // Welford's method: sums of squares of large values would cancel out
+        count++;
+        double deltaSeconds = seconds - meanSeconds;
+        meanSeconds += deltaSeconds / count;
+        double deltaFrames = frames - meanFrames;
+        meanFrames += deltaFrames / count;
+        varianceSeconds += deltaSeconds * (seconds - meanSeconds);
+        varianceFrames += deltaFrames * (frames - meanFrames);
+        covariance += deltaSeconds * (frames - meanFrames);
+    }
+
+    double spanSeconds() const {
+        return count > 0 ? lastSeconds - firstSeconds : 0;
+    }
+
+    /**
+     * @return false while there are too few samples, otherwise writes how much faster the sender's clock runs than
+     *         the device's, as a fraction of the nominal rate, and the standard error of that
+     */
+    bool estimate(int32_t nominalRate, double &difference, double &standardError) const {
+        if (count < 3 || varianceSeconds <= 0) {
+            return false;
+        }
+        double slope = covariance / varianceSeconds;
+        double residuals = std::max(0.0, varianceFrames - slope * covariance);
+        difference = slope / nominalRate - 1;
+        standardError = std::sqrt(residuals / (count - 2) / varianceSeconds) / nominalRate;
+        return true;
+    }
+
+private:
+    int64_t count = 0;
+    double firstSeconds = 0;
+    double lastSeconds = 0;
+    double meanSeconds = 0;
+    double meanFrames = 0;
+    double varianceSeconds = 0;
+    double varianceFrames = 0;
+    double covariance = 0;
+};
+
+// The clock difference measured per source, so a stream opened again (e.g. after the screen was off) starts with it.
+std::mutex measuredClocksLock;
+std::unordered_map<std::string, double> measuredClocks;
+
+/**
  * Plays the audio of an NDI source. A receiver of its own (audio only) feeds a jitter buffer on a capture thread,
  * so a late packet only changes how full the buffer is. The output's data callback plays it back with a resampler
- * that converts to the device rate and trims the rate slightly to hold the buffer at its target.
+ * that converts to the device rate, follows the measured clock difference between sender and device and trims the
+ * rate slightly to hold the buffer at its target.
  *
  * For A/V sync the callback records when it played which output frame and how much was buffered in front of it;
  * together with the stream's timestamp this gives the time it takes audio from arriving to the speaker.
@@ -159,6 +233,14 @@ public:
             return false;
         }
         stopped = false;
+        if (!stream && !clockMeasured) {
+            std::lock_guard<std::mutex> clocksGuard(measuredClocksLock);
+            auto measured = measuredClocks.find(sourceName);
+            if (measured != measuredClocks.end()) {
+                clockDifference = measured->second;
+                clockRemembered = true;
+            }
+        }
         startCaptureLocked();
         return openLocked();
     }
@@ -172,6 +254,10 @@ public:
             stream.reset();
         }
         stopCaptureLocked();
+        if (clockMeasured) {
+            std::lock_guard<std::mutex> clocksGuard(measuredClocksLock);
+            measuredClocks[sourceName] = clockDifference;
+        }
     }
 
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
@@ -185,6 +271,12 @@ public:
             // nothing received yet
             std::fill(out, out + 2 * numFrames, 0.f);
             return oboe::DataCallbackResult::Continue;
+        }
+
+        framesPlayed += numFrames;
+        if (framesPlayed >= nextClockSampleAt) {
+            nextClockSampleAt = framesPlayed + outputRate;
+            measureClock((double) framesPlayed / outputRate, sourceRate);
         }
 
         int32_t buffered = ring.available();
@@ -211,14 +303,15 @@ public:
             averageLevel = buffered;
         } else if (buffered < needed) {
             underruns.fetch_add(1, std::memory_order_relaxed);
-            int32_t largerMs = std::min(targetMs + BUFFER_STEP_MS, BUFFER_MAX_MS);
+            int32_t largerMs = std::min(targetMs + BUFFER_STEP_MS, bufferMaxMs.load(std::memory_order_relaxed));
             bufferTargetMs.store(largerMs, std::memory_order_relaxed);
             if (lastShrinkAt != 0 && playedAt - lastShrinkAt < 2 * shrinkWindowNanos) {
                 // shrunk too early
                 shrinkWindowNanos = std::min(2 * shrinkWindowNanos, BUFFER_SHRINK_WINDOW_MAX_NANOS);
             }
-            __android_log_print(ANDROID_LOG_INFO, TAG, "Buffer ran empty, target %d ms, next shrink after %lld s",
-                    largerMs, (long long) (shrinkWindowNanos / 1000000000LL));
+            __android_log_print(ANDROID_LOG_INFO, TAG,
+                    "Buffer ran empty, target %d ms, next shrink after %lld s, sender clock %+.3f %%", largerMs,
+                    (long long) (shrinkWindowNanos / 1000000000LL), clockDifference * 100);
             buffering = true;
             std::fill(out, out + 2 * numFrames, 0.f);
             return oboe::DataCallbackResult::Continue;
@@ -234,7 +327,7 @@ public:
         // play a little faster while above the target and slower while below
         averageLevel += (buffered - averageLevel) / LEVEL_AVERAGE_CALLBACKS;
         double deviationSeconds = (averageLevel - target) / sourceRate;
-        double correction = std::clamp(deviationSeconds * RATE_CORRECTION_PER_SECOND,
+        double correction = std::clamp(clockDifference + deviationSeconds * RATE_CORRECTION_PER_SECOND,
                 -MAX_RATE_CORRECTION, MAX_RATE_CORRECTION);
         double step = nominalStep * (1 + correction);
 
@@ -252,6 +345,11 @@ public:
                         (long long) (shrinkWindowNanos / 1000000000LL), shrinkWindowDip * 1000 / sourceRate,
                         smallerMs);
             }
+            __android_log_print(ANDROID_LOG_INFO, TAG,
+                    "Level %+.1f ms off target, sender clock %+.3f %% (%s, ±%.3f %% over %.0f s)",
+                    (averageLevel - target) * 1000 / sourceRate, clockDifference * 100,
+                    clockMeasured ? "measured" : clockRemembered ? "remembered, measuring" : "not measured yet",
+                    clockError * 100, clockEstimator.spanSeconds());
             shrinkWindowStart = playedAt;
             shrinkWindowDip = 0;
         }
@@ -306,9 +404,25 @@ public:
         }
     }
 
+    /**
+     * Lowers the buffer's limit for a source that also sends video: the video waits for its audio.
+     */
+    void limitBufferForVideo() {
+        bufferMaxMs.store(BUFFER_MAX_WITH_VIDEO_MS, std::memory_order_relaxed);
+        int32_t targetMs = bufferTargetMs.load(std::memory_order_relaxed);
+        while (targetMs > BUFFER_MAX_WITH_VIDEO_MS
+                && !bufferTargetMs.compare_exchange_weak(targetMs, BUFFER_MAX_WITH_VIDEO_MS,
+                        std::memory_order_relaxed)) {
+        }
+    }
+
     void takePeaks(float &left, float &right) {
         left = peakLeft.exchange(0.f, std::memory_order_relaxed);
         right = peakRight.exchange(0.f, std::memory_order_relaxed);
+    }
+
+    bool isReceiving() const {
+        return receivedSampleRate.load(std::memory_order_acquire) > 0;
     }
 
     /**
@@ -366,6 +480,32 @@ public:
     }
 
 private:
+    /**
+     * Adds a sample of the frames received so far at {@code seconds} played on the device's clock, and uses the
+     * measured clock difference once it is accurate enough.
+     */
+    void measureClock(double seconds, int32_t sourceRate) {
+        int64_t received = receivedFrames.load(std::memory_order_relaxed);
+        if (received == lastSampleReceived || sourceRate != measuredSourceRate) {
+            // nothing arrived for a second, the sender paused, or its rate changed: either would bend the line
+            clockEstimator.reset();
+        }
+        lastSampleReceived = received;
+        measuredSourceRate = sourceRate;
+        clockEstimator.add(seconds, (double) received);
+
+        double difference;
+        double error;
+        if (clockEstimator.spanSeconds() >= CLOCK_MIN_SPAN_SECONDS
+                && clockEstimator.estimate(sourceRate, difference, error)) {
+            clockError = error;
+            if (error <= CLOCK_MAX_ERROR) {
+                clockDifference = std::clamp(difference, -MAX_RATE_CORRECTION, MAX_RATE_CORRECTION);
+                clockMeasured = true;
+            }
+        }
+    }
+
     void startCaptureLocked() {
         if (capturing.exchange(true)) {
             return;
@@ -401,6 +541,7 @@ private:
             if (frame.p_data && frame.no_channels > 0 && frame.no_samples > 0 && frame.sample_rate > 0) {
                 // the buffer counts samples at the sender's rate
                 receivedSampleRate.store(frame.sample_rate, std::memory_order_release);
+                receivedFrames.fetch_add(frame.no_samples, std::memory_order_relaxed);
                 // planar float: one block of samples per channel
                 const auto *left = reinterpret_cast<const float *>(frame.p_data);
                 const float *right = frame.no_channels > 1
@@ -421,6 +562,11 @@ private:
         phase = 0;
         previousLeft = 0.f;
         previousRight = 0.f;
+        // the device's clock is counted in frames played, which start over
+        framesPlayed = 0;
+        nextClockSampleAt = 0;
+        lastSampleReceived = -1;
+        clockEstimator.reset();
 
         // No sample rate requested: the device's native rate avoids a second resampler in Android. 10 ms per
         // callback instead of the 2 ms burst keeps the per-call overhead low; the first frame of each callback
@@ -468,6 +614,7 @@ private:
     std::atomic<bool> capturing{false};
     std::thread captureThread;
     std::atomic<int32_t> receivedSampleRate{0};
+    std::atomic<int64_t> receivedFrames{0};
     RingBuffer ring;
 
     // only touched by the output callback, and by openLocked while no stream runs
@@ -480,8 +627,20 @@ private:
     int64_t lastShrinkAt = 0;
     float previousLeft = 0.f;
     float previousRight = 0.f;
+    int64_t framesPlayed = 0;
+    int64_t nextClockSampleAt = 0;
+    int64_t lastSampleReceived = -1;
+    int32_t measuredSourceRate = 0;
+    ClockEstimator clockEstimator;
+    // How much faster the sender's clock runs than the device's, as a fraction. Kept when the stream is reopened:
+    // the clocks stay the same. Also touched by start() and stop() while no stream runs.
+    double clockDifference = 0;
+    double clockError = 0;
+    bool clockMeasured = false;
+    bool clockRemembered = false;
 
     std::atomic<int32_t> bufferTargetMs{BUFFER_INITIAL_MS};
+    std::atomic<int32_t> bufferMaxMs{BUFFER_MAX_MS};
     std::atomic<int32_t> bufferedMillis{0};
     std::atomic<int64_t> underruns{0};
 
@@ -524,11 +683,21 @@ extern "C" {
     }
 
     JNIEXPORT void JNICALL
+    Java_de_daubli_feedwatch_ndi_NdiAudioPlayer_limitBufferForVideo(JNIEnv *env, jclass jClazz, jlong pPlayer) {
+        reinterpret_cast<AudioPlayer *>(pPlayer)->limitBufferForVideo();
+    }
+
+    JNIEXPORT void JNICALL
     Java_de_daubli_feedwatch_ndi_NdiAudioPlayer_takePeaks(JNIEnv *env, jclass jClazz, jlong pPlayer,
             jfloatArray jPeaks) {
         float peaks[2];
         reinterpret_cast<AudioPlayer *>(pPlayer)->takePeaks(peaks[0], peaks[1]);
         env->SetFloatArrayRegion(jPeaks, 0, 2, peaks);
+    }
+
+    JNIEXPORT jboolean JNICALL
+    Java_de_daubli_feedwatch_ndi_NdiAudioPlayer_isReceiving(JNIEnv *env, jclass jClazz, jlong pPlayer) {
+        return reinterpret_cast<AudioPlayer *>(pPlayer)->isReceiving();
     }
 
     JNIEXPORT void JNICALL

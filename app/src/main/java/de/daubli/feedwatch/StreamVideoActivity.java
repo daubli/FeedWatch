@@ -7,10 +7,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.*;
 import android.widget.TextView;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.ToIntFunction;
@@ -25,6 +27,7 @@ import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.sources.VideoSource;
 import de.daubli.feedwatch.uvc.StreamUvcVideoRunner;
 import de.daubli.feedwatch.uvc.UVCSource;
+import de.daubli.feedwatch.view.SystemInsets;
 import de.daubli.feedwatch.view.hud.StreamStatsPopup;
 import de.daubli.feedwatch.view.hud.ToolSettingsPopup;
 import de.daubli.feedwatch.view.overlays.focusassist.FocusPeakingColor;
@@ -76,6 +79,16 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     private int lastVideoWidth;
 
+    private boolean audioOnlyShown;
+
+    // unlike lastVideoWidth also set in viewer mode
+    private boolean videoReceived;
+
+    private boolean audioReceived;
+
+    // the stream was kept running when the screen went off
+    private boolean playingInBackground;
+
     private int lastVideoHeight;
 
     private float lastFrameRate = -1f;
@@ -87,6 +100,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         viewBinding = StreamVideoActivityBinding.inflate(getLayoutInflater());
         setContentView(viewBinding.getRoot());
+        SystemInsets.padForDisplayCutout(viewBinding.getRoot());
 
         videoSource = resolveVideoSource(getIntent());
         viewerMode = new SettingsStore().isViewerModeEnabled();
@@ -153,6 +167,7 @@ public class StreamVideoActivity extends AppCompatActivity {
         SettingsStore settingsStore = new SettingsStore();
         viewBinding.openGLVideoView.setFocusPeakingColor(settingsStore.getFocusPeakingColor().getColor());
         viewBinding.openGLVideoView.setFocusPeakingSensitivity(settingsStore.getFocusPeakingSensitivity());
+        viewBinding.openGLVideoView.setFocusPeakingMono(settingsStore.isFocusPeakingMono());
         viewBinding.openGLVideoView.setZebraThreshold(settingsStore.getZebraThreshold());
         applyFramingGuides(settingsStore);
         viewBinding.waveformMonitorView.setMode(settingsStore.getWaveformMode());
@@ -524,6 +539,17 @@ public class StreamVideoActivity extends AppCompatActivity {
                             if (!settingsStore.isFocusAssistEnabled()) {
                                 setFocusAssistEnabled(true);
                             }
+                        })
+                .addChoices(getString(R.string.peaking_settings_background),
+                        Arrays.asList(ToolSettingsPopup.Choice.text(getString(R.string.peaking_background_color)),
+                                ToolSettingsPopup.Choice.text(getString(R.string.peaking_background_mono))),
+                        settingsStore.isFocusPeakingMono() ? 1 : 0, index -> {
+                            settingsStore.setFocusPeakingMono(index == 1);
+                            viewBinding.openGLVideoView.setFocusPeakingMono(index == 1);
+                            // like the color, the background is only visible with peaking on
+                            if (!settingsStore.isFocusAssistEnabled()) {
+                                setFocusAssistEnabled(true);
+                            }
                         });
         showToolSettings(popup, viewBinding.focusAssistButton);
     }
@@ -701,12 +727,6 @@ public class StreamVideoActivity extends AppCompatActivity {
     }
 
     private void initializeAudioButton() {
-        // audio is NDI-only
-        if (videoSource instanceof UVCSource) {
-            viewBinding.audioButton.setVisibility(View.GONE);
-            return;
-        }
-
         showAudioEnabled(new SettingsStore().isAudioEnabled());
         viewBinding.audioButton.setOnClickListener(view -> {
             extendMenuTimeout();
@@ -737,13 +757,17 @@ public class StreamVideoActivity extends AppCompatActivity {
         viewBinding.sourceTypeBadge.setBackgroundResource(isUvc ? R.drawable.bg_badge_usb : R.drawable.bg_badge_ndi);
         viewBinding.sourceNameText.setText(videoSource != null ? videoSource.getSourceName() : null);
 
-        // tally and audio only exist for NDI sources
+        // tally only exists for NDI sources
         viewBinding.tallyChip.setVisibility(isUvc ? View.GONE : View.VISIBLE);
-        if (isUvc) {
-            viewBinding.audioMeterView.setVisibility(View.GONE);
-        }
         viewBinding.lowBandwidthChip.setVisibility(
                 !isUvc && new SettingsStore().isLowBandwidthModeEnabled() ? View.VISIBLE : View.GONE);
+
+        if (isUvc) {
+            viewBinding.resolutionChip.setOnClickListener(view -> {
+                extendMenuTimeout();
+                showResolutionPicker();
+            });
+        }
     }
 
     /**
@@ -752,6 +776,7 @@ public class StreamVideoActivity extends AppCompatActivity {
      * @param frameRate nominal or measured frames per second, or 0 if unknown
      */
     public void onVideoFormat(int width, int height, float frameRate, String format) {
+        videoReceived = true;
         if (viewerMode) {
             return;
         }
@@ -804,11 +829,59 @@ public class StreamVideoActivity extends AppCompatActivity {
 
     /**
      * Called on the main thread once per display frame with linear peak levels (0..1).
+     *
+     * @param receiving whether audio of the source has arrived
      */
-    public void onAudioLevels(float left, float right) {
+    public void onAudioLevels(float left, float right, boolean receiving) {
+        audioReceived = receiving;
         if (hudShown) {
             viewBinding.audioMeterView.setLevels(left, right);
         }
+        // until the first video frame the resolution chip says there is no signal, audio is a signal too
+        if (receiving && !audioOnlyShown && lastVideoWidth == 0 && !viewerMode) {
+            audioOnlyShown = true;
+            viewBinding.resolutionChip.setText(R.string.hud_audio_only);
+        }
+    }
+
+    private static final int[] RESOLUTION_HEIGHTS = {480, 576, 720, 1080};
+
+    private void showResolutionPicker() {
+        SettingsStore settingsStore = new SettingsStore();
+        int current = settingsStore.getUvcResolutionHeight();
+
+        List<ToolSettingsPopup.Choice> choices = new ArrayList<>();
+        int selected = 0;
+        for (int i = 0; i < RESOLUTION_HEIGHTS.length; i++) {
+            choices.add(ToolSettingsPopup.Choice.text(getString(R.string.resolution_choice, RESOLUTION_HEIGHTS[i])));
+            if (RESOLUTION_HEIGHTS[i] == current) {
+                selected = i;
+            }
+        }
+
+        ToolSettingsPopup popup = new ToolSettingsPopup(this, getString(R.string.resolution_settings_title))
+                .addChoices(getString(R.string.resolution_settings_choice), choices, selected, index -> {
+                    int height = RESOLUTION_HEIGHTS[index];
+                    if (height != settingsStore.getUvcResolutionHeight()) {
+                        settingsStore.setUvcResolutionHeight(height);
+                        // the camera has to be reopened with the new frame size
+                        restartStream();
+                    }
+                });
+        showToolSettingsBelow(popup, viewBinding.resolutionChip);
+    }
+
+    /**
+     * Opens a tool's settings below its button, for buttons in the top bar. The HUD stays open while they are shown.
+     */
+    private void showToolSettingsBelow(ToolSettingsPopup popup, View toolButton) {
+        dismissToolSettings();
+        dismissStats();
+        menuHandler.removeCallbacks(hideMenuCallback);
+
+        popup.setOnDismissListener(this::extendMenuTimeout);
+        toolSettingsPopup = popup;
+        popup.showBelow(toolButton);
     }
 
     private void initializeCloseButton() {
@@ -867,11 +940,22 @@ public class StreamVideoActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
+        if (playingInBackground) {
+            // the stream kept playing while the screen was off
+            playingInBackground = false;
+            AudioPlaybackService.stop(this);
+            return;
+        }
+
         if (videoSource == null) {
             finish();
             return;
         }
 
+        startStream();
+    }
+
+    private void startStream() {
         if (videoSource instanceof NdiSource) {
             runner = new StreamNDIVideoRunner((NdiSource) videoSource, viewBinding, this);
             runner.start();
@@ -883,16 +967,56 @@ public class StreamVideoActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Reopens the stream, e.g. after the preferred UVC resolution changed.
+     */
+    private void restartStream() {
+        if (runner != null) {
+            runner.stopStream();
+            runner = null;
+        }
+        startStream();
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
         dismissToolSettings();
         dismissStats();
 
+        // A source without video keeps playing while the screen is off, there is nothing to watch anyway
+        if (runner != null && playsAudioOnlyWithScreenOff()) {
+            playingInBackground = true;
+            AudioPlaybackService.start(this, videoSource.getSourceName());
+            return;
+        }
+
         // The screen going off pauses the activity too. It stays open and onResume connects again.
         if (runner != null) {
             runner.stopStream();
             runner = null;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if (playingInBackground) {
+            playingInBackground = false;
+            AudioPlaybackService.stop(this);
+            // Destroyed with the stream still playing, e.g. recreated for the lock screen's orientation: the next
+            // instance starts its own. A runner that closed the activity itself has released everything already.
+            if (runner != null && !isFinishing()) {
+                runner.stopStream();
+                runner = null;
+            }
+        }
+    }
+
+    private boolean playsAudioOnlyWithScreenOff() {
+        PowerManager powerManager = getSystemService(PowerManager.class);
+        return videoSource instanceof NdiSource && audioReceived && !videoReceived
+                && new SettingsStore().isAudioEnabled() && !powerManager.isInteractive();
     }
 }

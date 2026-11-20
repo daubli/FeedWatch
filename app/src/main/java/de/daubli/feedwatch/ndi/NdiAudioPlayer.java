@@ -3,8 +3,8 @@ package de.daubli.feedwatch.ndi;
 /**
  * Plays the audio of an NDI source on the device's audio output. It has a receiver of its own for the audio, which
  * fills a jitter buffer: audio held back by Wi-Fi for a moment only changes how full the buffer is. The buffer grows
- * each time it runs empty anyway. Playback is resampled slightly to hold the buffer level, which absorbs the clock
- * difference between sender and device.
+ * each time it runs empty anyway, further for a source without video. Playback is resampled slightly to follow the
+ * measured clock difference between sender and device and to hold the buffer level.
  */
 public class NdiAudioPlayer implements AutoCloseable {
 
@@ -28,10 +28,25 @@ public class NdiAudioPlayer implements AutoCloseable {
     }
 
     /**
+     * Lowers the jitter buffer's limit once the source turns out to send video too: the video is held back until
+     * its audio is heard, and only a few frames can wait. Without video the buffer may grow larger.
+     */
+    public void limitBufferForVideo() {
+        limitBufferForVideo(instancePointer);
+    }
+
+    /**
      * Writes the left and right peak levels (0..1) since the last call into {@code peaks}.
      */
     public void takePeaks(float[] peaks) {
         takePeaks(instancePointer, peaks);
+    }
+
+    /**
+     * @return true once audio of the source has arrived
+     */
+    public boolean isReceiving() {
+        return isReceiving(instancePointer);
     }
 
     /**
@@ -63,7 +78,11 @@ public class NdiAudioPlayer implements AutoCloseable {
 
     private static native void stop(long pPlayer);
 
+    private static native void limitBufferForVideo(long pPlayer);
+
     private static native void takePeaks(long pPlayer, float[] peaks);
+
+    private static native boolean isReceiving(long pPlayer);
 
     private static native long outputLatencyNanos(long pPlayer);
 

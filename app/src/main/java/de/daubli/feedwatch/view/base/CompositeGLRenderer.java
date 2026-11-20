@@ -83,13 +83,22 @@ public class CompositeGLRenderer implements GLSurfaceView.Renderer {
 
         // 3) Draw overlays ON SCREEN, sampling fboTexture (no feedback loop)
         Rect videoRect = baseRenderer.getVideoRect();
-        int frameWidth = baseRenderer.getFrameWidth();
-        int frameHeight = baseRenderer.getFrameHeight();
+        boolean frameTextureReady = false;
         for (Overlay overlay : overlays) {
             if (!overlay.isEnabled()) {
                 continue;
             }
-            overlay.setFrameSize(frameWidth, frameHeight);
+            if (overlay.needsFrameTexture()) {
+                if (!frameTextureReady) {
+                    // converted at most once a frame, it renders into a framebuffer of its own
+                    baseRenderer.updateFrameTexture();
+                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+                    GLES20.glViewport(0, 0, fboWidth, fboHeight);
+                    frameTextureReady = true;
+                }
+                overlay.setFrameTexture(baseRenderer.getFrameTexture(), baseRenderer.getFrameTextureWidth(),
+                        baseRenderer.getFrameTextureHeight());
+            }
             overlay.draw(fboTexture, videoRect.left, videoRect.top, videoRect.width(), videoRect.height(),
                     baseRenderer.surfaceWidth, baseRenderer.surfaceHeight);
         }

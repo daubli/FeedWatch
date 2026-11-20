@@ -21,8 +21,10 @@ monitoring tools. The latest APK is on the [releases page](https://github.com/da
 - **NDI® High Bandwidth** sources from the network. NDI® can be network-intensive, so a **USB-C Ethernet adapter** is
   strongly recommended.
 - **Additional NDI® senders** outside mDNS discovery can be added by their IP address in the Settings.
-- **UVC capture cards**, such as USB HDMI grabbers, show up as sources as soon as they are plugged in (tested with a
-  low-cost UGREEN Video Capture Card).
+- **UVC capture cards**, such as USB HDMI grabbers, show up as sources as soon as they are plugged in. Capture goes
+  through [libuvc](https://github.com/libuvc/libuvc), so cards that stream over isochronous endpoints work as well as
+  bulk-only ones, and the frame size is chosen from the formats the card actually reports. MJPEG is preferred.
+  Tested with a low-cost UGREEN Video Capture Card and a MACROSILICON MS2109 based HDMI grabber.
 - **Default source**: long-press a source to open it automatically when the app starts, after a short countdown.
 - **Low Bandwidth Mode** uses the NDI® proxy stream instead of full resolution, for phones on Wi-Fi.
 
@@ -43,9 +45,12 @@ Tap a tool button to turn the tool on or off, long-press it for its settings.
 
 - **NDI® tally**: red for program, green for preview, in the top bar and as a border around the picture
 - **Audio**: NDI® audio in sync with the picture, with a stereo level meter and a jitter buffer of 50 to 200 ms. Muted,
-  the picture is shown with the lowest latency.
+  the picture is shown with the lowest latency. For UVC sources the card's USB audio input is played and metered as
+  well. This needs the microphone permission, which the app asks for together with the camera permission.
+- **Resolution** (UVC only): tap the resolution chip in the top bar to pick 480p, 576p, 720p or 1080p. The choice
+  is stored and the stream is reopened with it; if the card does not offer that height, the closest one is used.
 - **Stream statistics**: frame rates, dropped and skipped frames, bandwidth and audio buffer, updated twice a second.
-  For UVC sources also the data rate and the time to decode a frame.
+  For UVC sources also the data rate and the time to copy a frame.
 - **Viewer mode**: only the picture, with the close and audio buttons
 
 ## Build Requirements
@@ -53,46 +58,47 @@ Tap a tool button to turn the tool on or off, long-press it for its settings.
 Before building, we need to make sure that the following components are installed:
 
 - Java Development Kit (JDK) 17
-- Android SDK Platform 33
+- Android SDK Platform 36, NDK 27.3.13750724 and CMake 3.22.1
 - NDI SDK for Android
 
 ### 1. Java 17
 
-Build the project with JDK 17, like the release workflow does. Gradle 7.4 and the Android Gradle Plugin 7.2.2 run on
-JDK 11 to 17; newer JDKs fail while dexing. If your default JDK is a different one, point Gradle to JDK 17:
+Build the project with JDK 17, like the release workflow does. If your default JDK is a different one, point Gradle to
+JDK 17:
 
-`./gradlew -Dorg.gradle.java.home=<JDK_17_HOME> assemble`
+`./gradlew -Dorg.gradle.java.home=<JDK_17_HOME> assembleDebug`
 
 The JDK only runs the build. The app itself is compiled for Java 8 and runs on Android 7.1 (API level 25) and newer.
 
 ### 2. Android SDK
 
-Install Android SDK Platform 33. Instruction can be
-found [here](https://developer.android.com/about/versions/13/setup-sdk)
+Install Android SDK Platform 36 and, from the SDK Manager's SDK Tools, NDK 27.3.13750724 and CMake 3.22.1. Instructions
+can be found [here](https://developer.android.com/about/versions/16/setup-sdk).
 
-### 3. Download and Install the NDI SDK
+### 3. NDI SDK for Android
 
-Download the NDI SDK for Android from the [official site](https://ndi.video/for-developers/ndi-sdk/download/)
+`libndi.so` and the NDI headers are not part of this repository. Download the NDI SDK for Android from the
+[official site](https://ndi.video/for-developers/ndi-sdk/download/) and run its installer, which asks you to accept the
+NDI SDK license. Then copy the headers and the libraries of the Android ABIs into the project:
 
-Follow the installer instructions for your platform and note the installation directory.
-
-### 3.1 Copy NDI Header Files
-
-After installation, copy the NDI header files into the project’s C++ include directory:
-
-`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/include/* \ <PROJECT_ROOT>/FeedWatch/app/src/main/cpp/include/`
-
-### 3.2 Copy NDI Library Binaries
-
-Next, copy the NDI library binaries into the project’s jniLibs directory:
-
-`cp <NDI_SDK_INSTALL_DIR>/NDI\ SDK\ for\ Android/lib/* <PROJECT_ROOT>/FeedWatch/app/src/main/jniLibs/`
-
-Ensure that the copied libraries match the ABIs you intend to build for (e.g. arm64-v8a, armeabi-v7a).
+```sh
+cp "<NDI_SDK_INSTALL_DIR>/NDI SDK for Android/include/"* app/src/main/cpp/include/
+cp -R "<NDI_SDK_INSTALL_DIR>/NDI SDK for Android/lib/"* app/src/main/jniLibs/
+```
 
 ### 4. Build the Project
 
-`./gradlew assemble`
+`./gradlew assembleDebug`
+
+The APK is written to `app/build/outputs/apk/debug/`.
+
+## Troubleshooting
+
+**A UVC card shows no picture and logcat says `failed start_streaming (-5)`.** The card got stuck, usually because an
+app was killed while it was streaming. Unplug the card and plug it in again; it needs its power cycled.
+
+**A UVC card does not open at all.** Another app that opens USB cameras when they are attached can hold the card. Close
+it or keep it from opening the card.
 
 ## State of this project
 
