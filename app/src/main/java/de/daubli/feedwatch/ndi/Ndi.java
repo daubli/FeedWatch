@@ -5,6 +5,7 @@ package de.daubli.feedwatch.ndi;
 import java.io.File;
 
 import android.content.Context;
+import de.daubli.feedwatch.settings.SettingsStore;
 
 public class Ndi {
     static {
@@ -12,7 +13,9 @@ public class Ndi {
     }
 
     public static void initialize(Context context) {
-        File configDir = NdiConfig.write(new File(context.getNoBackupFilesDir(), "ndi"));
+        // a changed discovery server only takes effect in a new process, the library reads the file once
+        File configDir = NdiConfig.write(new File(context.getNoBackupFilesDir(), "ndi"),
+                new SettingsStore().getDiscoveryServers());
         // the library keeps lock files in TMPDIR, without it in /data/local/tmp where apps can't write
         boolean initialized = nInitializeNDI(configDir != null ? configDir.getAbsolutePath() : null,
                 context.getCacheDir().getAbsolutePath());

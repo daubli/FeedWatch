@@ -1,8 +1,11 @@
 package de.daubli.feedwatch;
 
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
+import android.content.ComponentName;
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -16,9 +19,11 @@ import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
 import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.view.SystemInsets;
@@ -31,6 +36,11 @@ public class SettingsActivity extends AppCompatActivity {
     private static final Pattern IPV4_ADDRESS = Pattern.compile(
             "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$");
 
+    // a host name or IPv4 address, optionally with a port from 1 to 65535
+    private static final Pattern DISCOVERY_SERVER = Pattern.compile(
+            "^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*"
+                    + "(:(6553[0-5]|655[0-2]\\d|65[0-4]\\d{2}|6[0-4]\\d{3}|[1-5]\\d{4}|[1-9]\\d{0,3}))?$");
+
     ViewGroup additionalSourcesList;
 
     View additionalSourcesEmpty;
@@ -41,6 +51,10 @@ public class SettingsActivity extends AppCompatActivity {
 
     // edited here and stored with the other settings on save
     private ArrayList<String> additionalSources;
+
+    TextInputLayout discoveryServerInputLayout;
+
+    EditText discoveryServerInput;
 
     CompoundButton lowBandwidthModeEnabledSwitch;
 
@@ -65,6 +79,8 @@ public class SettingsActivity extends AppCompatActivity {
         additionalSourcesEmpty = findViewById(R.id.additionalSourcesEmpty);
         additionalSourceInputLayout = findViewById(R.id.additionalSourceInputLayout);
         additionalSourceInput = findViewById(R.id.additionalSourceInput);
+        discoveryServerInputLayout = findViewById(R.id.discoveryServerInputLayout);
+        discoveryServerInput = findViewById(R.id.discoveryServerInput);
         lowBandwidthModeEnabledSwitch = findViewById(R.id.lowBandwidthMode);
         viewerModeEnabledSwitch = findViewById(R.id.viewerMode);
         defaultSourceSummary = findViewById(R.id.defaultSourceSummary);
@@ -83,6 +99,26 @@ public class SettingsActivity extends AppCompatActivity {
                 ? restoredSources
                 : new ArrayList<>(settingsStore.getAdditionalSourceList());
         bindAdditionalSources();
+
+        // after a rotation the field keeps what was typed
+        if (savedInstanceState == null) {
+            discoveryServerInput.setText(settingsStore.getDiscoveryServers());
+        }
+        discoveryServerInput.addTextChangedListener(new TextWatcher() {
+
+            @Override
+            public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence text, int start, int before, int count) {
+                discoveryServerInputLayout.setError(null);
+            }
+
+            @Override
+            public void afterTextChanged(Editable text) {
+            }
+        });
 
         findViewById(R.id.additionalSourceAdd).setOnClickListener(v -> addAdditionalSource());
         additionalSourceInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -136,11 +172,70 @@ public class SettingsActivity extends AppCompatActivity {
             if (additionalSourceInput.length() > 0 && !addAdditionalSource()) {
                 return;
             }
+            String discoveryServers = normalizeDiscoveryServers(discoveryServerInput.getText().toString());
+            if (discoveryServers == null) {
+                discoveryServerInputLayout.setError(getString(R.string.settings_discovery_server_invalid));
+                discoveryServerInput.requestFocus();
+                return;
+            }
+            boolean discoveryChanged = !Objects.equals(emptyToNull(discoveryServers),
+                    settingsStore.getDiscoveryServers());
+
             this.settingsStore.setAdditionalSourceList(additionalSources);
+            this.settingsStore.setDiscoveryServers(discoveryServers);
             this.settingsStore.setLowBandwidthModeEnabled(lowBandwidthModeEnabledSwitch.isChecked());
             this.settingsStore.setViewerModeEnabled(viewerModeEnabledSwitch.isChecked());
-            this.finish();
+
+            if (discoveryChanged) {
+                askForRestart();
+            } else {
+                this.finish();
+            }
         });
+    }
+
+    /**
+     * The library reads the discovery server once per process, see {@link de.daubli.feedwatch.ndi.NdiConfig}.
+     */
+    private void askForRestart() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.settings_discovery_server_restart_title)
+                .setMessage(R.string.settings_discovery_server_restart_message)
+                .setPositiveButton(R.string.settings_discovery_server_restart_now, (dialog, which) -> restartApp())
+                .setNegativeButton(R.string.settings_discovery_server_restart_later, (dialog, which) -> finish())
+                .setOnCancelListener(dialog -> finish())
+                .show();
+    }
+
+    private void restartApp() {
+        // the system starts the new task in a new process once this one is gone
+        startActivity(Intent.makeRestartActivityTask(new ComponentName(this, MainActivity.class)));
+        Runtime.getRuntime().exit(0);
+    }
+
+    /**
+     * @return the servers without blanks and empty entries, "" for none, or null if one of them is no valid address
+     */
+    @Nullable
+    @VisibleForTesting
+    static String normalizeDiscoveryServers(String input) {
+        ArrayList<String> servers = new ArrayList<>();
+        for (String server : input.split(",")) {
+            String trimmed = server.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            if (!DISCOVERY_SERVER.matcher(trimmed).matches()) {
+                return null;
+            }
+            servers.add(trimmed);
+        }
+        return String.join(",", servers);
+    }
+
+    @Nullable
+    private static String emptyToNull(String value) {
+        return value.isEmpty() ? null : value;
     }
 
     @Override

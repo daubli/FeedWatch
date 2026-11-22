@@ -30,6 +30,14 @@
     <string name="settings_additional_source_remove">Remove source</string>
     <string name="settings_additional_source_invalid">Enter an IP address like 192.168.1.20</string>
     <string name="settings_additional_source_duplicate">This address is already in the list</string>
+    <string name="settings_discovery_server">NDI® Discovery Server</string>
+    <string name="settings_discovery_server_summary">Find sources through a discovery server in addition to mDNS. Several servers are separated by commas, the port defaults to 5959</string>
+    <string name="settings_discovery_server_hint">Server address</string>
+    <string name="settings_discovery_server_invalid">Enter an address like 192.168.1.10 or ndi-server:5959</string>
+    <string name="settings_discovery_server_restart_title">Restart FeedWatch?</string>
+    <string name="settings_discovery_server_restart_message">The NDI® library reads the discovery server only when the app starts.</string>
+    <string name="settings_discovery_server_restart_now">Restart now</string>
+    <string name="settings_discovery_server_restart_later">Later</string>
     <string name="settings_section_stream">Stream</string>
     <string name="settings_low_bandwidth">Low bandwidth mode</string>
     <string name="settings_low_bandwidth_summary">Receive the lower-quality NDI proxy stream to save bandwidth and battery</string>

@@ -30,6 +30,8 @@ public class SettingsStore {
 
     private static final String ADDITIONAL_SOURCES_KEY = "de.daubli.feedwatch.additionalsources";
 
+    private static final String DISCOVERY_SERVERS_KEY = "de.daubli.feedwatch.ndi.discoveryservers";
+
     private static final String FRAMING_HELPER_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.enabled";
 
     private static final String FRAMING_GRID_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.grid";
@@ -132,6 +134,20 @@ public class SettingsStore {
 
     public void setAdditionalSourceList(List<String> sources) {
         setAdditionalSources(String.join(",", sources));
+    }
+
+    /**
+     * @return the NDI Discovery Servers, comma-separated, each with an optional port, or null for none
+     */
+    @Nullable
+    public String getDiscoveryServers() {
+        String servers = sharedPreferences.getString(DISCOVERY_SERVERS_KEY, null);
+        return servers == null || servers.isEmpty() ? null : servers;
+    }
+
+    public void setDiscoveryServers(@Nullable String discoveryServers) {
+        String value = discoveryServers != null ? StringUtils.deleteWhitespace(discoveryServers) : "";
+        sharedPreferences.edit().putString(DISCOVERY_SERVERS_KEY, value).apply();
     }
 
     private String trimAndFormatAdditionalSourcesValue(String additionalSources) {

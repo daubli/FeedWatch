@@ -37,6 +37,7 @@ public class SettingsStoreTest {
     public void defaultsOfAFreshInstall() {
         assertNull(store.getAdditionalSources());
         assertTrue(store.getAdditionalSourceList().isEmpty());
+        assertNull(store.getDiscoveryServers());
 
         assertFalse(store.isFramingHelperOverlayEnabled());
         assertEquals(FramingGrid.THIRDS, store.getFramingGrid());
@@ -240,5 +241,22 @@ public class SettingsStoreTest {
     private static SharedPreferences preferences() {
         return ApplicationProvider.getApplicationContext()
                 .getSharedPreferences("de.daubli.feedwatch_preferences", Context.MODE_PRIVATE);
+    }
+
+    @Test
+    public void storesTheDiscoveryServersWithoutBlanks() {
+        store.setDiscoveryServers(" 192.168.1.10, ndi-server:5960 ");
+        assertEquals("192.168.1.10,ndi-server:5960", store.getDiscoveryServers());
+    }
+
+    @Test
+    public void clearsTheDiscoveryServers() {
+        store.setDiscoveryServers("192.168.1.10");
+        store.setDiscoveryServers("");
+        assertNull(store.getDiscoveryServers());
+
+        store.setDiscoveryServers("192.168.1.10");
+        store.setDiscoveryServers(null);
+        assertNull(store.getDiscoveryServers());
     }
 }

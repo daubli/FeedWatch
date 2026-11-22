@@ -20,6 +20,9 @@ import androidx.annotation.Nullable;
  * Reliable UDP (QUIC) stays off, also should a library update turn it on by default: it costs too much CPU. Under the
  * same load it carried only 46 to 59 Mbit/s on that TV, about 15 audio dropouts a minute, and on a phone over Wi-Fi it
  * fell to 10 fps after a minute while TCP held 25 fps.
+ * <p>
+ * An NDI Discovery Server from the settings goes in here as well. The library reads the file once per process, neither
+ * a new finder nor a new initialization picks up a change (tried with SDK 6.3.2), so a new server needs an app restart.
  */
 public final class NdiConfig {
 
@@ -27,32 +30,46 @@ public final class NdiConfig {
 
     static final String FILE_NAME = "ndi-config.v1.json";
 
-    static final String SETTINGS = "{\"ndi\":{"
-            + "\"rudp\":{\"recv\":{\"enable\":false}},"
-            + "\"tcp\":{\"recv\":{\"enable\":false}},"
-            + "\"unicast\":{\"recv\":{\"enable\":false}}"
-            + "}}";
+    static final String SETTINGS = settings(null);
 
     private NdiConfig() {
     }
 
     /**
+     * @param discoveryServers comma-separated NDI Discovery Servers, each with an optional port, or null for none
+     */
+    static String settings(@Nullable String discoveryServers) {
+        StringBuilder json = new StringBuilder("{\"ndi\":{")
+                .append("\"rudp\":{\"recv\":{\"enable\":false}},")
+                .append("\"tcp\":{\"recv\":{\"enable\":false}},")
+                .append("\"unicast\":{\"recv\":{\"enable\":false}}");
+        if (discoveryServers != null && !discoveryServers.isEmpty()) {
+            json.append(",\"networks\":{\"discovery\":\"")
+                    .append(discoveryServers.replace("\\", "\\\\").replace("\"", "\\\""))
+                    .append("\"}");
+        }
+        return json.append("}}").toString();
+    }
+
+    /**
      * Writes the settings into the folder, unless they are there already.
      *
+     * @param discoveryServers comma-separated NDI Discovery Servers, each with an optional port, or null for none
      * @return the folder, or null if the settings could not be written there
      */
     @Nullable
-    public static File write(File dir) {
+    public static File write(File dir, @Nullable String discoveryServers) {
         File file = new File(dir, FILE_NAME);
+        String settings = settings(discoveryServers);
         try {
-            if (file.isFile() && SETTINGS.equals(new String(Files.readAllBytes(file.toPath()),
+            if (file.isFile() && settings.equals(new String(Files.readAllBytes(file.toPath()),
                     StandardCharsets.UTF_8))) {
                 return dir;
             }
             if (!dir.isDirectory() && !dir.mkdirs()) {
                 throw new IOException("Could not create " + dir);
             }
-            Files.write(file.toPath(), SETTINGS.getBytes(StandardCharsets.UTF_8));
+            Files.write(file.toPath(), settings.getBytes(StandardCharsets.UTF_8));
             return dir;
         } catch (IOException e) {
             LOG.log(Level.WARNING, "NDI settings not written, the library uses its defaults", e);

@@ -132,6 +132,54 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_settings_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_discovery_server"
+                        android:textColor="@color/fw_text_primary"
+                        android:textSize="16sp"/>
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:lineSpacingMultiplier="1.15"
+                        android:text="@string/settings_discovery_server_summary"
+                        android:textColor="@color/fw_text_secondary"
+                        android:textSize="13sp"/>
+
+                <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/discoveryServerInputLayout"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:hint="@string/settings_discovery_server_hint"
+                        app:boxStrokeColor="@color/text_input_box_stroke"
+                        app:endIconMode="clear_text"
+                        app:hintTextColor="@color/fw_accent">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/discoveryServerInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:imeOptions="actionDone"
+                            android:inputType="textVisiblePassword|textNoSuggestions"
+                            android:maxLines="1"
+                            android:textColor="@color/fw_text_primary"
+                            android:textSize="15sp"
+                            tools:text="192.168.1.10"/>
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
             <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
