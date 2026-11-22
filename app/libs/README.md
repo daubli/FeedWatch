@@ -1,21 +1,25 @@
-# UVCAndroid with a fix for bulk capture cards
+# UVCAndroid with fixes for bulk capture cards and UVC 1.5 cameras
 
-`UVCAndroid-1.0.13-feedwatch.aar` is [UVCAndroid](https://github.com/shiyinghan/UVCAndroid) 1.0.13 with one fix
-in libuvc. It replaces `com.herohan:UVCAndroid:1.0.13` until a release upstream contains the fix; then switch back to
-the Maven artifact and delete this folder.
+`UVCAndroid-1.0.13-feedwatch.aar` is [UVCAndroid](https://github.com/shiyinghan/UVCAndroid) 1.0.13 with two fixes
+in libuvc. It replaces `com.herohan:UVCAndroid:1.0.13` until a release upstream contains the fixes; then switch back
+to the Maven artifact and delete this folder.
 
-## The fix
+## The fixes
 
 UVCAndroid limits bulk USB transfers to 16 KB on Android, but libuvc still treated every transfer as a complete UVC
 payload. Cards that send larger payloads lose every frame: the UGREEN 25854 (1de1:f105) sends each MJPEG frame of
 about 900 KB as one payload with a single header, and with the unpatched library FeedWatch shows no signal for it.
 The fix collects the transfers of a payload until it ends and processes it then. Isochronous cards are not affected.
 
+libuvc also rejected every camera that reports UVC 1.5 (`bcdUVC` 0x0150) with error -12 when opening it, although
+the rest of the library already handles 1.5. The DJI Osmo Action 5 Pro (05c6:8004) is such a camera. The fix accepts
+1.5 like 1.1.
+
 ## Source
 
 - Fork: https://github.com/daubli/UVCAndroid, branch `fix/bulk-payload-reassembly`
-- Built from commit `4ac1dd7` (the fix is `2400a12`, the other commit pins NDK 27.3.13750724)
-- SHA-256 of the AAR: `c65c2c40b21c02b6031fb031f1bcc4934e744da7354a779338b4ce6caf48de4f`
+- Built from commit `0b3b124` (the fixes are `2400a12` and `0b3b124`, `4ac1dd7` pins NDK 27.3.13750724)
+- SHA-256 of the AAR: `9d782f95016fc12dd0f193e7fac04aec9536361587aaa946b1fb47f76551ed1f`
 - Licenses: UVCAndroid is Apache 2.0, libuvc BSD, libusb LGPL 2.1 (as a separate shared library), libjpeg-turbo and
   libyuv BSD-style; the license texts are in the fork's source folders
 
