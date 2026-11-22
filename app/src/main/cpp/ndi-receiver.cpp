@@ -4,7 +4,7 @@
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCreate(JNIEnv* env, jclass /*clazz*/, jint bandwidth)
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCreate(JNIEnv* env, jclass /*clazz*/, jint bandwidth, jstring jName)
 {
     NDIlib_recv_create_v3_t recv_create_struct;
     std::memset(&recv_create_struct, 0, sizeof(recv_create_struct));
@@ -15,7 +15,13 @@ Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveCreate(JNIEnv* env, jclass /*cla
     recv_create_struct.allow_video_fields = true;
     recv_create_struct.source_to_connect_to = nullptr;
 
+    // null lets the library name it after the app and the receiver's number
+    const char* name = (jName != nullptr) ? env->GetStringUTFChars(jName, nullptr) : nullptr;
+    recv_create_struct.p_ndi_recv_name = name;
+
     NDIlib_recv_instance_t receiver = NDIlib_recv_create_v3(&recv_create_struct);
+
+    if (jName != nullptr) env->ReleaseStringUTFChars(jName, name);
 
     return reinterpret_cast<jlong>(receiver);
 }
@@ -46,12 +52,33 @@ Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveConnect(
     NDIlib_source_t src;
     std::memset(&src, 0, sizeof(src));
     src.p_ndi_name = name;
-    src.p_url_address = url;
+    // a source known only by its name, e.g. from a controller, is looked up by the library
+    src.p_url_address = (url != nullptr && url[0] != '\0') ? url : nullptr;
 
     NDIlib_recv_connect(recv, &src);
 
     if (jName != nullptr) env->ReleaseStringUTFChars(jName, name);
     if (jUrlAddress != nullptr) env->ReleaseStringUTFChars(jUrlAddress, url);
+}
+
+/**
+ * The name of the source the receiver is connected to now, also when a controller connected it through an NDI
+ * Discovery Server, or null if it is not connected to one.
+ */
+JNIEXPORT jstring JNICALL
+Java_de_daubli_feedwatch_ndi_NdiReceiver_receiveGetSourceName(JNIEnv* env, jclass /*clazz*/, jlong pReceiver)
+{
+    auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
+    if (!recv) return nullptr;
+
+    // the name is returned whether it changed since the last call or not
+    const char* name = nullptr;
+    NDIlib_recv_get_source_name(recv, &name, 0);
+    if (name == nullptr) return nullptr;
+
+    jstring result = env->NewStringUTF(name);
+    NDIlib_recv_free_string(recv, name);
+    return result;
 }
 
 JNIEXPORT void JNICALL

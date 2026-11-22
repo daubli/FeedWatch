@@ -39,16 +39,45 @@ public final class NdiConfig {
      * @param discoveryServers comma-separated NDI Discovery Servers, each with an optional port, or null for none
      */
     static String settings(@Nullable String discoveryServers) {
-        StringBuilder json = new StringBuilder("{\"ndi\":{")
-                .append("\"rudp\":{\"recv\":{\"enable\":false}},")
+        return settings(discoveryServers, null);
+    }
+
+    /**
+     * @param machineName how the device is named on the network instead of its host name, or null for that
+     */
+    static String settings(@Nullable String discoveryServers, @Nullable String machineName) {
+        StringBuilder json = new StringBuilder("{\"ndi\":{");
+        if (machineName != null && !machineName.isEmpty()) {
+            json.append("\"machinename\":\"").append(escape(machineName)).append("\",");
+        }
+        json.append("\"rudp\":{\"recv\":{\"enable\":false}},")
                 .append("\"tcp\":{\"recv\":{\"enable\":false}},")
                 .append("\"unicast\":{\"recv\":{\"enable\":false}}");
         if (discoveryServers != null && !discoveryServers.isEmpty()) {
             json.append(",\"networks\":{\"discovery\":\"")
-                    .append(discoveryServers.replace("\\", "\\\\").replace("\"", "\\\""))
+                    .append(escape(discoveryServers))
                     .append("\"}");
         }
         return json.append("}}").toString();
+    }
+
+    /**
+     * Makes a device name usable as NDI machine name. Controllers read a name up to its first parenthesis as the
+     * machine, "TV (Kitchen) (FeedWatch)" would be split wrongly, so parentheses become brackets. Control
+     * characters, which the configuration file can't hold as they are, become spaces.
+     */
+    static String machineName(@Nullable String deviceName) {
+        if (deviceName == null) {
+            return "";
+        }
+        return deviceName.replace('(', '[').replace(')', ']')
+                .replaceAll("\\p{Cntrl}", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private static String escape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     /**
@@ -59,8 +88,20 @@ public final class NdiConfig {
      */
     @Nullable
     public static File write(File dir, @Nullable String discoveryServers) {
+        return write(dir, discoveryServers, null);
+    }
+
+    /**
+     * Writes the settings into the folder, unless they are there already.
+     *
+     * @param discoveryServers comma-separated NDI Discovery Servers, each with an optional port, or null for none
+     * @param machineName      how the device is named on the network instead of its host name, or null for that
+     * @return the folder, or null if the settings could not be written there
+     */
+    @Nullable
+    public static File write(File dir, @Nullable String discoveryServers, @Nullable String machineName) {
         File file = new File(dir, FILE_NAME);
-        String settings = settings(discoveryServers);
+        String settings = settings(discoveryServers, machineName);
         try {
             if (file.isFile() && settings.equals(new String(Files.readAllBytes(file.toPath()),
                     StandardCharsets.UTF_8))) {

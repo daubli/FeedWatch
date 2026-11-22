@@ -1,5 +1,7 @@
 package de.daubli.feedwatch.ndi;
 
+import androidx.annotation.Nullable;
+
 public class NdiReceiver extends NdiFrameCleaner {
 
     // NDIlib_recv_bandwidth_e, video and metadata only: the audio comes from a receiver of its own (NdiAudioPlayer),
@@ -11,11 +13,14 @@ public class NdiReceiver extends NdiFrameCleaner {
     final long instancePointer;
 
     public NdiReceiver(boolean lowBandwidthModeEnabled) {
-        this(lowBandwidthModeEnabled ? BANDWIDTH_LOWEST : BANDWIDTH_HIGHEST);
+        this(lowBandwidthModeEnabled, null);
     }
 
-    private NdiReceiver(int bandwidth) {
-        this.instancePointer = receiveCreate(bandwidth);
+    /**
+     * @param name how the receiver is listed by an NDI Discovery Server, or null for the library's default
+     */
+    public NdiReceiver(boolean lowBandwidthModeEnabled, @Nullable String name) {
+        this.instancePointer = receiveCreate(lowBandwidthModeEnabled ? BANDWIDTH_LOWEST : BANDWIDTH_HIGHEST, name);
     }
 
     public void connect(NdiSource ndiSource ) {
@@ -24,6 +29,15 @@ public class NdiReceiver extends NdiFrameCleaner {
         } else {
             receiveConnect(instancePointer, ndiSource.getSourceName(), ndiSource.getUrlAddress());
         }
+    }
+
+    /**
+     * @return the name of the source the receiver is connected to now, also when a controller connected it, or null
+     *         if it is not connected to one
+     */
+    @Nullable
+    public String getSourceName() {
+        return receiveGetSourceName(instancePointer);
     }
 
     public NdiTally captureTally(int timeoutMs) {
@@ -50,7 +64,9 @@ public class NdiReceiver extends NdiFrameCleaner {
         // video is only captured through NdiFrameSync
     }
 
-    private static native long receiveCreate(int bandwidth);
+    private static native long receiveCreate(int bandwidth, String name);
+
+    private static native String receiveGetSourceName(long receiverPtr);
 
     private static native void receiveConnect(long receiverPtr, String name, String urlAddress);
 

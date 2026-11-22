@@ -66,6 +66,49 @@ public class NdiConfigTest {
     }
 
     @Test
+    public void namesTheMachine() {
+        assertEquals("{\"ndi\":{"
+                + "\"machinename\":\"M31 von \\\"Daniel\\\"\","
+                + "\"rudp\":{\"recv\":{\"enable\":false}},"
+                + "\"tcp\":{\"recv\":{\"enable\":false}},"
+                + "\"unicast\":{\"recv\":{\"enable\":false}},"
+                + "\"networks\":{\"discovery\":\"192.168.1.10\"}"
+                + "}}", NdiConfig.settings("192.168.1.10", "M31 von \"Daniel\""));
+    }
+
+    @Test
+    public void machineNameHasNoParentheses() {
+        // controllers read "TV (Kitchen) (FeedWatch)" as machine "TV"
+        assertEquals("TV [Kitchen]", NdiConfig.machineName("TV (Kitchen)"));
+    }
+
+    @Test
+    public void machineNameHasNoControlCharacters() {
+        assertEquals("Living Room TV", NdiConfig.machineName(" Living\tRoom\n TV "));
+    }
+
+    @Test
+    public void noMachineNameWithoutADeviceName() {
+        assertEquals("", NdiConfig.machineName(null));
+        assertEquals("", NdiConfig.machineName(" \t"));
+    }
+
+    @Test
+    public void keepsTheHostNameWithoutAMachineName() {
+        assertEquals(NdiConfig.settings("192.168.1.10"), NdiConfig.settings("192.168.1.10", ""));
+        assertFalse(NdiConfig.settings("192.168.1.10", null).contains("machinename"));
+    }
+
+    @Test
+    public void rewritesTheFileWhenTheMachineNameChanges() throws IOException {
+        File dir = temp.newFolder("ndi");
+        NdiConfig.write(dir, "192.168.1.10", "Phone");
+
+        assertEquals(dir, NdiConfig.write(dir, "192.168.1.10", "Living Room TV"));
+        assertEquals(NdiConfig.settings("192.168.1.10", "Living Room TV"), read(new File(dir, NdiConfig.FILE_NAME)));
+    }
+
+    @Test
     public void rewritesTheFileWhenTheDiscoveryServerChanges() throws IOException {
         File dir = temp.newFolder("ndi");
         NdiConfig.write(dir, null);

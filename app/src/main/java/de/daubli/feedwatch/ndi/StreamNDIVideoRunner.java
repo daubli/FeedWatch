@@ -42,7 +42,8 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private final NdiSource ndiSource;
+    // a controller may switch it, see switchSource
+    private volatile NdiSource ndiSource;
 
     private final StreamVideoActivity activity;
 
@@ -54,6 +55,12 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
 
     // read by the statistics on the main thread
     private volatile NdiReceiver receiver;
+
+    // the receiver advertised to an NDI Discovery Server, handed back instead of closed; null for one of our own
+    private NdiRemoteReceiver remoteReceiver;
+
+    // hands the receiver and frame sync over between run() and their release
+    private final Object receiverLock = new Object();
 
     private volatile boolean lowBandwidth;
 
@@ -133,12 +140,25 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
         try {
             SettingsStore settingsStore = new SettingsStore();
             lowBandwidth = settingsStore.isLowBandwidthModeEnabled();
-            NdiReceiver receiver = new NdiReceiver(lowBandwidth);
-            receiver.connect(ndiSource);
-            this.receiver = receiver;
+            NdiRemoteReceiver remote = NdiRemoteReceiver.getInstance();
+            // waits for the previous stream to hand it back
+            NdiReceiver receiver = remote != null ? remote.acquire(ndiSource, lowBandwidth) : null;
+            if (receiver == null) {
+                remote = null;
+                receiver = new NdiReceiver(lowBandwidth);
+                receiver.connect(ndiSource);
+            }
+            synchronized (receiverLock) {
+                if (!running) {
+                    // released while waiting for the receiver
+                    closeReceiver(receiver, remote);
+                    return;
+                }
+                this.receiver = receiver;
+                this.remoteReceiver = remote;
+                frameSync = new NdiFrameSync(receiver);
+            }
             connectedAtMillis = SystemClock.elapsedRealtime();
-
-            frameSync = new NdiFrameSync(receiver);
 
             for (int i = 0; i < VIDEO_FRAME_POOL_SIZE; i++) {
                 freeFrames.offer(new NdiVideoFrame());
@@ -214,6 +234,40 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
                 }
             });
         }, "NDI-Shutdown").start();
+    }
+
+    /**
+     * Shows another source of the same receiver, after a controller connected it there; the video follows through
+     * the frame sync. The audio has a receiver of its own, which is connected anew. Must be called on the main
+     * thread.
+     */
+    public void switchSource(NdiSource source) {
+        ndiSource = source;
+        synchronized (receiverLock) {
+            // A receiver of our own, taken when the advertised one was not handed back in time, is not the one the
+            // controller switched; it follows the controller too.
+            if (receiver != null && remoteReceiver == null) {
+                receiver.connect(source);
+            }
+        }
+        connectedAtMillis = SystemClock.elapsedRealtime();
+        tallyOverlayView.updateTally(false, false);
+
+        // black until the new source's first picture, like at the start; frames still waiting are the old source's
+        videoView.setVisibility(View.INVISIBLE);
+        firstFramePending = true;
+        PendingFrame pending;
+        while ((pending = pendingFrames.poll()) != null) {
+            recycleFrame(pending.frame);
+        }
+
+        if (audioPlayer == null) {
+            // not started yet, run() creates it for the new source
+            return;
+        }
+        safeCloseAudioPlayer();
+        audioPlayer = new NdiAudioPlayer(source);
+        setAudioEnabled(audioEnabled);
     }
 
     /**
@@ -600,6 +654,11 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
     }
 
     private void safeCloseFrameSync() {
+        NdiFrameSync frameSync;
+        synchronized (receiverLock) {
+            frameSync = this.frameSync;
+            this.frameSync = null;
+        }
         if (frameSync == null) {
             return;
         }
@@ -607,17 +666,30 @@ public class StreamNDIVideoRunner extends Thread implements StreamVideoRunner {
             frameSync.close();
         } catch (Throwable ignored) {
         }
-        frameSync = null;
     }
 
     private void safeCloseReceiver() {
-        if (receiver == null) {
-            return;
+        NdiReceiver receiver;
+        NdiRemoteReceiver remote;
+        synchronized (receiverLock) {
+            receiver = this.receiver;
+            remote = remoteReceiver;
+            this.receiver = null;
+            remoteReceiver = null;
         }
+        if (receiver != null) {
+            closeReceiver(receiver, remote);
+        }
+    }
+
+    private static void closeReceiver(NdiReceiver receiver, NdiRemoteReceiver remote) {
         try {
-            receiver.close();
+            if (remote != null) {
+                remote.release(receiver);
+            } else {
+                receiver.close();
+            }
         } catch (Throwable ignored) {
         }
-        receiver = null;
     }
 }

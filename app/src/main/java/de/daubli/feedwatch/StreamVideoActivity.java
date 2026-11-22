@@ -19,6 +19,7 @@ import java.util.function.ToIntFunction;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.Lifecycle;
 import de.daubli.feedwatch.databinding.StreamVideoActivityBinding;
 import de.daubli.feedwatch.ndi.NdiDiscoveryManager;
 import de.daubli.feedwatch.ndi.NdiSource;
@@ -104,6 +105,7 @@ public class StreamVideoActivity extends AppCompatActivity {
 
         videoSource = resolveVideoSource(getIntent());
         viewerMode = new SettingsStore().isViewerModeEnabled();
+        RemoteSourceHandler.setStreamActivity(this);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         initMenu();
@@ -1001,6 +1003,7 @@ public class StreamVideoActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        RemoteSourceHandler.clearStreamActivity(this);
 
         if (playingInBackground) {
             playingInBackground = false;
@@ -1012,6 +1015,72 @@ public class StreamVideoActivity extends AppCompatActivity {
                 runner = null;
             }
         }
+    }
+
+    /**
+     * @return true while the stream is on screen, or plays its audio with the screen off
+     */
+    boolean isShowingStream() {
+        return playingInBackground || getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED);
+    }
+
+    /**
+     * Called on the main thread when a controller connected the advertised NDI receiver to another source, or with
+     * null when it disconnected it.
+     */
+    void onRemoteSource(@Nullable String sourceName) {
+        if (sourceName == null) {
+            // a USB source does not use the receiver
+            if (videoSource instanceof NdiSource) {
+                closeVideoActivity();
+            }
+            return;
+        }
+        NdiSource source = new NdiSource(sourceName, null);
+        if (!(videoSource instanceof NdiSource)) {
+            // the NDI source replaces the USB one
+            finish();
+            MainActivity.openRemoteSource(this, source);
+            return;
+        }
+        if (sourceName.equals(videoSource.getSourceName())) {
+            return;
+        }
+        videoSource = source;
+        // a new runner, e.g. after the screen was off, connects to it as well
+        MainActivity.selectVideoSource(source);
+        viewBinding.sourceNameText.setText(sourceName);
+        showNoSignal();
+        // shows which source is on now, as when a stream opens
+        if (!isPopupShowing()) {
+            showMenuAndScheduleHide();
+        }
+        onTallyState(false, false);
+        if (runner instanceof StreamNDIVideoRunner) {
+            ((StreamNDIVideoRunner) runner).switchSource(source);
+        }
+        if (playingInBackground) {
+            AudioPlaybackService.start(this, sourceName);
+        }
+    }
+
+    /**
+     * Forgets the previous source's format, until the new one sends a picture or audio.
+     */
+    private void showNoSignal() {
+        videoReceived = false;
+        audioReceived = false;
+        audioOnlyShown = false;
+        lastVideoWidth = 0;
+        lastVideoHeight = 0;
+        lastFrameRate = -1f;
+        lastFormat = null;
+        if (viewerMode) {
+            return;
+        }
+        viewBinding.resolutionChip.setText(R.string.hud_waiting);
+        setChip(viewBinding.fpsChip, null);
+        setChip(viewBinding.formatChip, null);
     }
 
     private boolean playsAudioOnlyWithScreenOff() {

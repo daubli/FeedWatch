@@ -8,6 +8,7 @@ add_library(ndi-wrapper SHARED
     ndi-source.cpp
     ndi-video-frame.cpp
     ndi-receiver.cpp
+    ndi-recv-advertiser.cpp
     ndi-frame-sync.cpp
     ndi-audio-player.cpp
 )

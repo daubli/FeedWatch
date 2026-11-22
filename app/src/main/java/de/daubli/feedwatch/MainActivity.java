@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.google.android.material.snackbar.Snackbar;
 
 import android.animation.ValueAnimator;
+import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -49,6 +51,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import de.daubli.feedwatch.ndi.Ndi;
 import de.daubli.feedwatch.ndi.NdiDiscoveryManager;
 import de.daubli.feedwatch.ndi.NdiFinder;
+import de.daubli.feedwatch.ndi.NdiRemoteReceiver;
 import de.daubli.feedwatch.ndi.NdiSource;
 import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.sources.SourceListAdapter;
@@ -130,6 +133,11 @@ public class MainActivity extends AppCompatActivity {
         Ndi.initialize(getApplicationContext());
 
         settingsStore = new SettingsStore();
+        String discoveryServers = settingsStore.getDiscoveryServers();
+        if (discoveryServers != null) {
+            // controllers find the app there as a receiver and can tell it which source to show
+            NdiRemoteReceiver.start(getApplication(), discoveryServers, new RemoteSourceHandler(this));
+        }
         ndiDiscoveryManager = new NdiDiscoveryManager(getApplicationContext());
 
         finder = new NdiFinder(false, null, settingsStore.getAdditionalSources());
@@ -610,6 +618,20 @@ public class MainActivity extends AppCompatActivity {
     public void beginStreaming() {
         Intent streamingIntent = new Intent(this, StreamVideoActivity.class);
         startActivity(streamingIntent);
+    }
+
+    /**
+     * Opens a stream for the source a controller connected the advertised NDI receiver to.
+     */
+    static void openRemoteSource(Context context, NdiSource source) {
+        // as if the user had opened it: the default source does not open on its own afterwards
+        autoStartConsumed = true;
+        selectVideoSource(source);
+        Intent streamingIntent = new Intent(context, StreamVideoActivity.class);
+        if (!(context instanceof Activity)) {
+            streamingIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        context.startActivity(streamingIntent);
     }
 
     public static VideoSource getSource() {
