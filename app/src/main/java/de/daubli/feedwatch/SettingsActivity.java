@@ -25,6 +25,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
+import de.daubli.feedwatch.ndi.NdiRemoteReceiver;
 import de.daubli.feedwatch.settings.SettingsStore;
 import de.daubli.feedwatch.view.SystemInsets;
 
@@ -56,6 +57,14 @@ public class SettingsActivity extends AppCompatActivity {
 
     EditText discoveryServerInput;
 
+    View receiverAdvertisingRow;
+
+    CompoundButton receiverAdvertisingSwitch;
+
+    View receiverControlRow;
+
+    CompoundButton receiverControlSwitch;
+
     CompoundButton lowBandwidthModeEnabledSwitch;
 
     CompoundButton viewerModeEnabledSwitch;
@@ -81,6 +90,10 @@ public class SettingsActivity extends AppCompatActivity {
         additionalSourceInput = findViewById(R.id.additionalSourceInput);
         discoveryServerInputLayout = findViewById(R.id.discoveryServerInputLayout);
         discoveryServerInput = findViewById(R.id.discoveryServerInput);
+        receiverAdvertisingRow = findViewById(R.id.receiverAdvertisingRow);
+        receiverAdvertisingSwitch = findViewById(R.id.receiverAdvertising);
+        receiverControlRow = findViewById(R.id.receiverControlRow);
+        receiverControlSwitch = findViewById(R.id.receiverControl);
         lowBandwidthModeEnabledSwitch = findViewById(R.id.lowBandwidthMode);
         viewerModeEnabledSwitch = findViewById(R.id.viewerMode);
         defaultSourceSummary = findViewById(R.id.defaultSourceSummary);
@@ -89,6 +102,10 @@ public class SettingsActivity extends AppCompatActivity {
         // the whole row toggles the switch
         findViewById(R.id.lowBandwidthRow).setOnClickListener(v -> lowBandwidthModeEnabledSwitch.toggle());
         findViewById(R.id.viewerModeRow).setOnClickListener(v -> viewerModeEnabledSwitch.toggle());
+        receiverAdvertisingRow.setOnClickListener(v -> receiverAdvertisingSwitch.toggle());
+        receiverControlRow.setOnClickListener(v -> receiverControlSwitch.toggle());
+        // control only applies to an advertised receiver
+        receiverAdvertisingSwitch.setOnCheckedChangeListener((v, checked) -> updateReceiverRows());
 
         settingsStore = new SettingsStore();
 
@@ -117,6 +134,7 @@ public class SettingsActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable text) {
+                updateReceiverRows();
             }
         });
 
@@ -185,6 +203,15 @@ public class SettingsActivity extends AppCompatActivity {
             this.settingsStore.setDiscoveryServers(discoveryServers);
             this.settingsStore.setLowBandwidthModeEnabled(lowBandwidthModeEnabledSwitch.isChecked());
             this.settingsStore.setViewerModeEnabled(viewerModeEnabledSwitch.isChecked());
+            boolean advertisingAllowed = receiverAdvertisingSwitch.isChecked();
+            boolean controlAllowed = receiverControlSwitch.isChecked();
+            this.settingsStore.setReceiverAdvertisingAllowed(advertisingAllowed);
+            this.settingsStore.setReceiverControlAllowed(controlAllowed);
+            // takes effect right away, without the restart a changed server needs
+            NdiRemoteReceiver remoteReceiver = NdiRemoteReceiver.getInstance();
+            if (remoteReceiver != null) {
+                remoteReceiver.setPermissions(advertisingAllowed, controlAllowed);
+            }
 
             if (discoveryChanged) {
                 askForRestart();
@@ -243,7 +270,27 @@ public class SettingsActivity extends AppCompatActivity {
         super.onResume();
         this.lowBandwidthModeEnabledSwitch.setChecked(settingsStore.isLowBandwidthModeEnabled());
         this.viewerModeEnabledSwitch.setChecked(settingsStore.isViewerModeEnabled());
+        this.receiverAdvertisingSwitch.setChecked(settingsStore.isReceiverAdvertisingAllowed());
+        this.receiverControlSwitch.setChecked(settingsStore.isReceiverControlAllowed());
+        updateReceiverRows();
         bindDefaultSource();
+    }
+
+    /**
+     * The receiver options need a discovery server, and control needs the advertising.
+     */
+    private void updateReceiverRows() {
+        boolean hasServer = discoveryServerInput.getText().toString().trim().length() > 0;
+        setRowEnabled(receiverAdvertisingRow, receiverAdvertisingSwitch, hasServer);
+        setRowEnabled(receiverControlRow, receiverControlSwitch, hasServer && receiverAdvertisingSwitch.isChecked());
+    }
+
+    private static void setRowEnabled(View row, CompoundButton toggle, boolean enabled) {
+        row.setEnabled(enabled);
+        // a disabled row is skipped by the D-pad on a TV
+        row.setFocusable(enabled);
+        toggle.setEnabled(enabled);
+        row.setAlpha(enabled ? 1f : 0.4f);
     }
 
     @Override

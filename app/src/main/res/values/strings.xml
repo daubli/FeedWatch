@@ -38,6 +38,10 @@
     <string name="settings_discovery_server_restart_message">The NDI® library reads the discovery server only when the app starts.</string>
     <string name="settings_discovery_server_restart_now">Restart now</string>
     <string name="settings_discovery_server_restart_later">Later</string>
+    <string name="settings_receiver_advertising">Allow receiver advertising</string>
+    <string name="settings_receiver_advertising_summary">Register FeedWatch as a receiver with the discovery server, so controllers see which source it shows</string>
+    <string name="settings_receiver_control">Allow receiver control</string>
+    <string name="settings_receiver_control_summary">Let controllers such as NDI® Discovery switch FeedWatch to another source or disconnect it</string>
     <string name="settings_section_stream">Stream</string>
     <string name="settings_low_bandwidth">Low bandwidth mode</string>
     <string name="settings_low_bandwidth_summary">Receive the lower-quality NDI proxy stream to save bandwidth and battery</string>

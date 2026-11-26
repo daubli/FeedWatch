@@ -23,6 +23,9 @@ import de.daubli.feedwatch.settings.SettingsStore;
  * It is one receiver for the whole process, the NDI streams take turns using it, so a controller keeps finding the
  * app under the same receiver. It is advertised while the app is in front or a stream plays, e.g. audio with the
  * screen off: an app in the background could not show what a controller connects it to.
+ * <p>
+ * The settings can turn the advertising off, the streams then still share the receiver, or let controllers only see
+ * the source without changing it.
  */
 public final class NdiRemoteReceiver {
 
@@ -56,7 +59,13 @@ public final class NdiRemoteReceiver {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private final NdiReceiverAdvertiser advertiser;
+    private final String discoveryServers;
+
+    // created the first time the receiver is advertised, nothing connects to the servers while that is not allowed
+    @Nullable
+    private NdiReceiverAdvertiser advertiser;
+
+    private boolean advertiserFailed;
 
     private final Listener listener;
 
@@ -73,6 +82,10 @@ public final class NdiRemoteReceiver {
 
     private boolean foreground;
 
+    private boolean advertisingAllowed;
+
+    private boolean controlAllowed;
+
     // the source the receiver is connected to as far as the app knows, a different one comes from a controller
     @Nullable
     private String sourceName;
@@ -84,14 +97,17 @@ public final class NdiRemoteReceiver {
 
     private final Runnable poll = this::poll;
 
-    private NdiRemoteReceiver(NdiReceiverAdvertiser advertiser, Listener listener) {
-        this.advertiser = advertiser;
+    private NdiRemoteReceiver(String discoveryServers, Listener listener, boolean advertisingAllowed,
+                              boolean controlAllowed) {
+        this.discoveryServers = discoveryServers;
         this.listener = listener;
+        this.advertisingAllowed = advertisingAllowed;
+        this.controlAllowed = controlAllowed;
     }
 
     /**
-     * Starts advertising the receiver, once per process. Call it on the main thread before the first activity
-     * starts, e.g. in its onCreate.
+     * Sets up the receiver, once per process, and advertises it if the settings allow that. Call it on the main
+     * thread before the first activity starts, e.g. in its onCreate.
      *
      * @param discoveryServers comma-separated NDI Discovery Servers, each with an optional port
      */
@@ -99,19 +115,15 @@ public final class NdiRemoteReceiver {
         if (instance != null) {
             return;
         }
-        NdiReceiverAdvertiser advertiser = new NdiReceiverAdvertiser(discoveryServers);
-        if (!advertiser.isValid()) {
-            Log.w(TAG, "No receiver advertiser for " + discoveryServers);
-            return;
-        }
-        NdiRemoteReceiver remoteReceiver = new NdiRemoteReceiver(advertiser, listener);
+        SettingsStore settings = new SettingsStore();
+        NdiRemoteReceiver remoteReceiver = new NdiRemoteReceiver(discoveryServers, listener,
+                settings.isReceiverAdvertisingAllowed(), settings.isReceiverControlAllowed());
         application.registerActivityLifecycleCallbacks(remoteReceiver.new ForegroundTracker());
         instance = remoteReceiver;
-        Log.i(TAG, "Advertising the receiver to " + discoveryServers);
     }
 
     /**
-     * @return the advertised receiver, or null if there is no NDI Discovery Server
+     * @return the receiver the streams share, or null if there is no NDI Discovery Server
      */
     @Nullable
     public static NdiRemoteReceiver getInstance() {
@@ -162,25 +174,71 @@ public final class NdiRemoteReceiver {
         updateAdvertising();
     }
 
+    /**
+     * Applies the settings right away: the receiver is advertised or withdrawn, or advertised anew with the other
+     * control permission. A stream that plays goes on with its source. Call it on the main thread.
+     */
+    public synchronized void setPermissions(boolean advertisingAllowed, boolean controlAllowed) {
+        boolean controlChanged = this.controlAllowed != controlAllowed;
+        this.advertisingAllowed = advertisingAllowed;
+        this.controlAllowed = controlAllowed;
+        if (controlChanged && advertised && advertiser != null && receiver != null) {
+            // the permission is only handed over when a receiver is added
+            advertiser.remove(receiver);
+            advertiser.add(receiver, controlAllowed, RECEIVER_NAME);
+            Log.i(TAG, "Controllers " + (controlAllowed ? "may" : "may no longer") + " switch the receiver");
+        }
+        updateAdvertising();
+    }
+
     // guarded by this
     private void updateAdvertising() {
-        boolean advertise = foreground || leased;
+        boolean advertise = advertisingAllowed && (foreground || leased);
         if (advertise == advertised) {
             return;
         }
         if (advertise) {
+            if (!ensureAdvertiser()) {
+                return;
+            }
             ensureReceiver(new SettingsStore().isLowBandwidthModeEnabled());
-            advertiser.add(receiver, RECEIVER_NAME);
+            advertiser.add(receiver, controlAllowed, RECEIVER_NAME);
             advertised = true;
             mainHandler.removeCallbacks(poll);
             mainHandler.post(poll);
+            Log.i(TAG, "Advertising the receiver to " + discoveryServers);
         } else {
             advertiser.remove(receiver);
             advertised = false;
             mainHandler.removeCallbacks(poll);
-            // a controller may have connected it after the app went to the background
-            connect(null);
+            // A controller may have connected it after the app went to the background. A stream that plays, when
+            // the advertising was turned off, keeps its source.
+            if (!leased) {
+                connect(null);
+            }
         }
+    }
+
+    /**
+     * Connects to the discovery servers, the first time the receiver is advertised. Guarded by this.
+     *
+     * @return false if the library could not create the advertiser
+     */
+    private boolean ensureAdvertiser() {
+        if (advertiser != null) {
+            return true;
+        }
+        if (advertiserFailed) {
+            return false;
+        }
+        NdiReceiverAdvertiser created = new NdiReceiverAdvertiser(discoveryServers);
+        if (!created.isValid()) {
+            Log.w(TAG, "No receiver advertiser for " + discoveryServers);
+            advertiserFailed = true;
+            return false;
+        }
+        advertiser = created;
+        return true;
     }
 
     /**
@@ -201,7 +259,7 @@ public final class NdiRemoteReceiver {
         this.lowBandwidth = lowBandwidth;
         sourceName = null;
         if (advertised) {
-            advertiser.add(receiver, RECEIVER_NAME);
+            advertiser.add(receiver, controlAllowed, RECEIVER_NAME);
         }
     }
 

@@ -38,6 +38,8 @@ public class SettingsStoreTest {
         assertNull(store.getAdditionalSources());
         assertTrue(store.getAdditionalSourceList().isEmpty());
         assertNull(store.getDiscoveryServers());
+        assertTrue(store.isReceiverAdvertisingAllowed());
+        assertTrue(store.isReceiverControlAllowed());
 
         assertFalse(store.isFramingHelperOverlayEnabled());
         assertEquals(FramingGrid.THIRDS, store.getFramingGrid());
@@ -129,8 +131,12 @@ public class SettingsStoreTest {
         store.setLowBandwidthModeEnabled(true);
         store.setAudioEnabled(false);
         store.setViewerModeEnabled(true);
+        store.setReceiverAdvertisingAllowed(false);
+        store.setReceiverControlAllowed(false);
 
         SettingsStore reloaded = new SettingsStore();
+        assertFalse(reloaded.isReceiverAdvertisingAllowed());
+        assertFalse(reloaded.isReceiverControlAllowed());
         assertTrue(reloaded.isFramingHelperOverlayEnabled());
         assertTrue(reloaded.isFocusAssistEnabled());
         assertTrue(reloaded.isFocusPeakingMono());

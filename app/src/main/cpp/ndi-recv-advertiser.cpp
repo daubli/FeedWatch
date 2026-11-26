@@ -28,18 +28,18 @@ Java_de_daubli_feedwatch_ndi_NdiReceiverAdvertiser_advertiserDestroy(JNIEnv* /*e
 }
 
 /**
- * Advertises the receiver, so controllers see which source it shows and can connect it to another one.
+ * Advertises the receiver, so controllers see which source it shows and, if allowed, can connect it to another one.
  */
 JNIEXPORT jboolean JNICALL
 Java_de_daubli_feedwatch_ndi_NdiReceiverAdvertiser_advertiserAddReceiver(JNIEnv* env, jclass /*clazz*/,
                                                                          jlong pAdvertiser, jlong pReceiver,
-                                                                         jstring jInputGroup)
+                                                                         jboolean allowControl, jstring jInputGroup)
 {
     auto advertiser = reinterpret_cast<NDIlib_recv_advertiser_instance_t>(pAdvertiser);
     auto recv = reinterpret_cast<NDIlib_recv_instance_t>(pReceiver);
     if (!advertiser || !recv) return JNI_FALSE;
     const char* group = (jInputGroup != nullptr) ? env->GetStringUTFChars(jInputGroup, nullptr) : nullptr;
-    bool added = NDIlib_recv_advertiser_add_receiver(advertiser, recv, true, true, group);
+    bool added = NDIlib_recv_advertiser_add_receiver(advertiser, recv, allowControl == JNI_TRUE, true, group);
     if (jInputGroup != nullptr) env->ReleaseStringUTFChars(jInputGroup, group);
     return added ? JNI_TRUE : JNI_FALSE;
 }

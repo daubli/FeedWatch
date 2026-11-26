@@ -178,6 +178,92 @@
                             android:textSize="15sp"
                             tools:text="192.168.1.10"/>
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <LinearLayout
+                        android:id="@+id/receiverAdvertisingRow"
+                        android:focusable="true"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="4dp">
+
+                    <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                        <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/settings_receiver_advertising"
+                                android:textColor="@color/fw_text_primary"
+                                android:textSize="15sp"/>
+
+                        <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:lineSpacingMultiplier="1.15"
+                                android:text="@string/settings_receiver_advertising_summary"
+                                android:textColor="@color/fw_text_secondary"
+                                android:textSize="13sp"/>
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/receiverAdvertising"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:focusable="false"
+                            android:contentDescription="@string/settings_receiver_advertising"/>
+                </LinearLayout>
+
+                <LinearLayout
+                        android:id="@+id/receiverControlRow"
+                        android:focusable="true"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="4dp">
+
+                    <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                        <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/settings_receiver_control"
+                                android:textColor="@color/fw_text_primary"
+                                android:textSize="15sp"/>
+
+                        <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:lineSpacingMultiplier="1.15"
+                                android:text="@string/settings_receiver_control_summary"
+                                android:textColor="@color/fw_text_secondary"
+                                android:textSize="13sp"/>
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/receiverControl"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:focusable="false"
+                            android:contentDescription="@string/settings_receiver_control"/>
+                </LinearLayout>
             </LinearLayout>
 
             <TextView

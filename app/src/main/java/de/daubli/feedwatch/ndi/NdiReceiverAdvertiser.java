@@ -21,11 +21,13 @@ class NdiReceiverAdvertiser implements AutoCloseable {
     }
 
     /**
-     * @param inputGroup groups receivers that belong together, e.g. one for video and one for audio, under one input
+     * @param allowControl whether controllers may connect the receiver to another source or disconnect it; they see
+     *                     which source it shows either way
+     * @param inputGroup   groups receivers that belong together, e.g. one for video and one for audio, under one input
      * @return false if the receiver is advertised already
      */
-    boolean add(NdiReceiver receiver, String inputGroup) {
-        return advertiserAddReceiver(instancePointer, receiver.instancePointer, inputGroup);
+    boolean add(NdiReceiver receiver, boolean allowControl, String inputGroup) {
+        return advertiserAddReceiver(instancePointer, receiver.instancePointer, allowControl, inputGroup);
     }
 
     /**
@@ -44,7 +46,8 @@ class NdiReceiverAdvertiser implements AutoCloseable {
 
     private static native void advertiserDestroy(long pAdvertiser);
 
-    private static native boolean advertiserAddReceiver(long pAdvertiser, long pReceiver, String inputGroup);
+    private static native boolean advertiserAddReceiver(long pAdvertiser, long pReceiver, boolean allowControl,
+                                                        String inputGroup);
 
     private static native boolean advertiserDelReceiver(long pAdvertiser, long pReceiver);
 }

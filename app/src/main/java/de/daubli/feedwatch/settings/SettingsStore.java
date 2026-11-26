@@ -32,6 +32,10 @@ public class SettingsStore {
 
     private static final String DISCOVERY_SERVERS_KEY = "de.daubli.feedwatch.ndi.discoveryservers";
 
+    private static final String RECEIVER_ADVERTISING_KEY = "de.daubli.feedwatch.ndi.receiver.advertising";
+
+    private static final String RECEIVER_CONTROL_KEY = "de.daubli.feedwatch.ndi.receiver.control";
+
     private static final String FRAMING_HELPER_ENABLED_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.enabled";
 
     private static final String FRAMING_GRID_KEY = "de.daubli.feedwatch.view.overlays.framing-helper.grid";
@@ -148,6 +152,30 @@ public class SettingsStore {
     public void setDiscoveryServers(@Nullable String discoveryServers) {
         String value = discoveryServers != null ? StringUtils.deleteWhitespace(discoveryServers) : "";
         sharedPreferences.edit().putString(DISCOVERY_SERVERS_KEY, value).apply();
+    }
+
+    /**
+     * Whether the app registers as a receiver with the NDI Discovery Servers, where controllers see which source it
+     * shows; on by default.
+     */
+    public boolean isReceiverAdvertisingAllowed() {
+        return sharedPreferences.getBoolean(RECEIVER_ADVERTISING_KEY, true);
+    }
+
+    public void setReceiverAdvertisingAllowed(boolean allowed) {
+        sharedPreferences.edit().putBoolean(RECEIVER_ADVERTISING_KEY, allowed).apply();
+    }
+
+    /**
+     * Whether controllers may connect the advertised receiver to another source or disconnect it; on by default.
+     * Only applies while the receiver is advertised.
+     */
+    public boolean isReceiverControlAllowed() {
+        return sharedPreferences.getBoolean(RECEIVER_CONTROL_KEY, true);
+    }
+
+    public void setReceiverControlAllowed(boolean allowed) {
+        sharedPreferences.edit().putBoolean(RECEIVER_CONTROL_KEY, allowed).apply();
     }
 
     private String trimAndFormatAdditionalSourcesValue(String additionalSources) {
